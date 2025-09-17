@@ -409,3 +409,134 @@ func TestConfigNodeString(t *testing.T) {
 		t.Logf("Src node string: %s", srcString)
 	}
 }
+
+func TestConfigTreeFlattenConfigs(t *testing.T) {
+	// Test flattening the monorepo config tree
+	configTree, err := DiscoverConfigs("example_repos/example_monorepo")
+	if err != nil {
+		t.Fatalf("Failed to discover configs: %v", err)
+	}
+
+	// Flatten the tree
+	flatConfigs := configTree.FlattenConfigs()
+
+	// Should find 9 configs total (5 main dirs + 4 nested in python_lib)
+	expectedCount := 9
+	if len(flatConfigs) != expectedCount {
+		t.Errorf("Expected %d flattened configs, got %d", expectedCount, len(flatConfigs))
+	}
+
+	// Verify all configs have valid paths and configs
+	var paths []string
+	for _, config := range flatConfigs {
+		if config == nil {
+			t.Error("Found nil config in flattened list")
+			continue
+		}
+
+		if config.Config == nil {
+			t.Errorf("Config node at %s has nil Config", config.Path)
+			continue
+		}
+
+		if config.Path == "" {
+			t.Error("Config node has empty Path")
+			continue
+		}
+
+		paths = append(paths, config.Path)
+	}
+
+	// Verify specific expected paths are included
+	expectedPaths := []string{
+		"docs/.tree-commit-config.yaml",
+		"frontend/.tree-commit-config.yaml",
+		"go_lib/.tree-commit-config.yaml",
+		"python_lib/.tree-commit-config.yaml",
+		"scripts/.tree-commit-config.yaml",
+		"python_lib/src/.tree-commit-config.yaml",
+		"python_lib/src/core/.tree-commit-config.yaml",
+		"python_lib/src/utils/.tree-commit-config.yaml",
+		"python_lib/src/utils/helpers/.tree-commit-config.yaml",
+	}
+
+	for _, expectedPath := range expectedPaths {
+		found := false
+		for _, actualPath := range paths {
+			if actualPath == expectedPath {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected path %s not found in flattened configs", expectedPath)
+		}
+	}
+
+	t.Logf("Flattened %d configs: %v", len(flatConfigs), paths)
+}
+
+func TestConfigTreeFlattenConfigsEmpty(t *testing.T) {
+	// Test flattening an empty directory
+	emptyDir := "example_repos/example_monorepo/frontend/src"
+	os.MkdirAll(emptyDir, 0755)
+
+	configTree, err := DiscoverConfigs(emptyDir)
+	if err != nil {
+		t.Fatalf("Failed to discover configs: %v", err)
+	}
+
+	// Flatten the tree
+	flatConfigs := configTree.FlattenConfigs()
+
+	// Should find 0 configs
+	if len(flatConfigs) != 0 {
+		t.Errorf("Expected 0 flattened configs, got %d", len(flatConfigs))
+	}
+}
+
+func TestConfigTreeFlattenConfigsNil(t *testing.T) {
+	// Test flattening a nil tree
+	var configTree *ConfigTree
+	flatConfigs := configTree.FlattenConfigs()
+
+	if flatConfigs != nil {
+		t.Error("Expected nil result for nil ConfigTree")
+	}
+
+	// Test flattening tree with nil root
+	configTree = &ConfigTree{Root: "test", Tree: nil}
+	flatConfigs = configTree.FlattenConfigs()
+
+	if flatConfigs != nil {
+		t.Error("Expected nil result for ConfigTree with nil Tree")
+	}
+}
+
+func TestConfigTreeFlattenConfigsSingleLevel(t *testing.T) {
+	// Test flattening a single library config
+	configTree, err := DiscoverConfigs("example_repos/example_monorepo/go_lib")
+	if err != nil {
+		t.Fatalf("Failed to discover configs: %v", err)
+	}
+
+	// Flatten the tree
+	flatConfigs := configTree.FlattenConfigs()
+
+	// Should find 1 config (just the go_lib root config)
+	expectedCount := 1
+	if len(flatConfigs) != expectedCount {
+		t.Errorf("Expected %d flattened configs, got %d", expectedCount, len(flatConfigs))
+	}
+
+	if len(flatConfigs) > 0 {
+		config := flatConfigs[0]
+		if config.Path != ".tree-commit-config.yaml" {
+			t.Errorf("Expected path '.tree-commit-config.yaml', got %s", config.Path)
+		}
+
+		if config.Config == nil {
+			t.Error("Config should not be nil")
+		}
+	}
+}

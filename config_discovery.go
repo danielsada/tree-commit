@@ -282,3 +282,31 @@ func parseConfig(configPath string) (*viper.Viper, error) {
 
 	return config, nil
 }
+
+// FlattenConfigs returns all config nodes from the tree as a flat list
+func (ct *ConfigTree) FlattenConfigs() []*ConfigNode {
+	if ct == nil || ct.Tree == nil {
+		return nil
+	}
+
+	var configs []*ConfigNode
+	ct.flattenNode(ct.Tree, &configs)
+	return configs
+}
+
+// flattenNode recursively traverses the tree and collects all config nodes
+func (ct *ConfigTree) flattenNode(node *ConfigNode, configs *[]*ConfigNode) {
+	if node == nil {
+		return
+	}
+
+	// Add this node if it has a config
+	if node.Config != nil {
+		*configs = append(*configs, node)
+	}
+
+	// Recursively process children
+	for _, child := range node.Children {
+		ct.flattenNode(child, configs)
+	}
+}
