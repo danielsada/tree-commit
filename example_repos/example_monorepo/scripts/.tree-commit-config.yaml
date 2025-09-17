@@ -1,0 +1,39 @@
+repos:
+  - repo: local
+    hooks:
+      - id: shellcheck
+        name: Shell Check
+        entry: shellcheck
+        language: system
+        files: \.(sh|bash)$
+        include_folders:
+          - .
+        exclude_folders:
+          - vendor/
+
+      - id: shfmt
+        name: Shell Format
+        entry: shfmt -w
+        language: system
+        files: \.(sh|bash)$
+        include_folders:
+          - .
+        exclude_folders:
+          - vendor/
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: trailing-whitespace
+        files: \.(sh|bash|py)$
+        include_folders:
+          - .
+        exclude_folders:
+          - __pycache__/
+
+      - id: executable-check
+        files: \.(sh|bash)$
+        include_folders:
+          - .
+        exclude_folders:
+          - vendor/

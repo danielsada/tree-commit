@@ -1,0 +1,51 @@
+repos:
+  - repo: local
+    hooks:
+      - id: gofmt
+        name: Go Format
+        entry: gofmt -l -w
+        language: system
+        files: \.go$
+        include_folders:
+          - cmd/
+          - pkg/
+          - internal/
+        exclude_folders:
+          - vendor/
+
+      - id: golint
+        name: Go Lint
+        entry: golint
+        language: system
+        files: \.go$
+        include_folders:
+          - cmd/
+          - pkg/
+          - internal/
+        exclude_folders:
+          - vendor/
+          - generated/
+
+      - id: go-test
+        name: Go Test
+        entry: go test ./...
+        language: system
+        files: \.go$
+        pass_filenames: false
+        include_folders:
+          - pkg/
+          - internal/
+        exclude_folders:
+          - vendor/
+          - testdata/
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: trailing-whitespace
+        include_folders:
+          - cmd/
+          - pkg/
+          - internal/
+        exclude_folders:
+          - vendor/

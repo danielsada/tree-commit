@@ -1,0 +1,48 @@
+repos:
+  - repo: local
+    hooks:
+      - id: eslint
+        name: ESLint
+        entry: eslint --fix
+        language: node
+        files: \.(js|jsx|ts|tsx)$
+        include_folders:
+          - src/
+          - components/
+        exclude_folders:
+          - node_modules/
+          - dist/
+          - build/
+
+      - id: prettier
+        name: Prettier
+        entry: prettier --write
+        language: node
+        files: \.(js|jsx|ts|tsx|css|scss|json)$
+        include_folders:
+          - src/
+          - public/
+        exclude_folders:
+          - node_modules/
+          - dist/
+
+      - id: typescript-check
+        name: TypeScript Check
+        entry: tsc --noEmit
+        language: node
+        files: \.(ts|tsx)$
+        pass_filenames: false
+        include_folders:
+          - src/
+        exclude_folders:
+          - node_modules/
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: trailing-whitespace
+        include_folders:
+          - src/
+          - public/
+        exclude_folders:
+          - node_modules/
