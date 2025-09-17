@@ -1,0 +1,33 @@
+repos:
+  - repo: local
+    hooks:
+      - id: python-isort
+        name: Python Import Sort
+        entry: isort
+        language: python
+        files: \.py$
+        include_folders:
+          - .
+        exclude_folders:
+          - __pycache__/
+
+      - id: python-docstring
+        name: Python Docstring Check
+        entry: pydocstyle
+        language: python
+        files: \.py$
+        include_folders:
+          - core/
+          - utils/
+        exclude_folders:
+          - __pycache__/
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: check-ast
+        files: \.py$
+        include_folders:
+          - .
+        exclude_folders:
+          - __pycache__/

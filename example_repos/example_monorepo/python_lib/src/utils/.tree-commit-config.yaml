@@ -1,0 +1,33 @@
+repos:
+  - repo: local
+    hooks:
+      - id: python-complexity
+        name: Python Complexity Check
+        entry: radon cc --min B
+        language: python
+        files: \.py$
+        include_folders:
+          - .
+        exclude_folders:
+          - __pycache__/
+          - helpers/
+
+      - id: python-unused-imports
+        name: Check for unused imports
+        entry: unimport --check
+        language: python
+        files: \.py$
+        include_folders:
+          - .
+        exclude_folders:
+          - __pycache__/
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: name-tests-test
+        files: \.py$
+        include_folders:
+          - .
+        exclude_folders:
+          - helpers/
