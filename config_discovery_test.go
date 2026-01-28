@@ -207,7 +207,9 @@ func TestDiscoverConfigsFilesystemMode(t *testing.T) {
 func TestDiscoverConfigsEmptyDirectory(t *testing.T) {
 	// Test walking a directory with no configs (use a subdirectory without configs)
 	emptyDir := "example_repos/example_monorepo/frontend/src"
-	os.MkdirAll(emptyDir, 0755)
+	if err := os.MkdirAll(emptyDir, 0755); err != nil {
+		t.Fatalf("Failed to create test directory: %v", err)
+	}
 
 	configTree, err := DiscoverConfigs(emptyDir)
 	if err != nil {
@@ -479,7 +481,9 @@ func TestConfigTreeFlattenConfigs(t *testing.T) {
 func TestConfigTreeFlattenConfigsEmpty(t *testing.T) {
 	// Test flattening an empty directory
 	emptyDir := "example_repos/example_monorepo/frontend/src"
-	os.MkdirAll(emptyDir, 0755)
+	if err := os.MkdirAll(emptyDir, 0755); err != nil {
+		t.Fatalf("Failed to create test directory: %v", err)
+	}
 
 	configTree, err := DiscoverConfigs(emptyDir)
 	if err != nil {

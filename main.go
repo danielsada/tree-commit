@@ -26,7 +26,9 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	rootCmd.PersistentFlags().StringP("config", "c", "", "config file (default is .tree-commit.yaml)")
-	viper.BindPFlag("config", rootCmd.PersistentFlags().Lookup("config"))
+	if err := viper.BindPFlag("config", rootCmd.PersistentFlags().Lookup("config")); err != nil {
+		fmt.Fprintf(os.Stderr, "Error binding config flag: %v\n", err)
+	}
 }
 
 func initConfig() {
