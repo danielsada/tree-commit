@@ -130,7 +130,7 @@ issues:
         - prealloc
 
     # Exclude example repos completely
-    - path: example_repos/
+    - path: example_repos
       linters:
         - all
 
