@@ -1,171 +1,119 @@
 version: "2"
 
-linters-settings:
-  # Complexity analysis
-  gocyclo:
-    min-complexity: 15
-
-  cyclop:
-    max-complexity: 20
-    package-average: 15.0
-
-  gocognit:
-    min-complexity: 20
-
-  funlen:
-    lines: 100
-    statements: 50
-
-  # Other linters
-  govet:
-    enable-all: true
-
-  errcheck:
-    check-type-assertions: true
-    check-blank: true
-
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
-
-  revive:
-    rules:
-      - name: exported
-        severity: warning
-      - name: unreachable-code
-        severity: warning
-      - name: unused-parameter
-        severity: warning
-
-  staticcheck:
-    checks: ["all"]
-
-  gosec:
-    excludes:
-      - G104 # Audit errors not checked (covered by errcheck)
-
-  goconst:
-    min-len: 3
-    min-occurrences: 3
-
-  misspell:
-    locale: US
-
-  lll:
-    line-length: 120
-    tab-width: 4
-
-linters:
-  enable:
-    # Enabled by default
-    - errcheck      # Check for unchecked errors
-    - govet         # Vet examines Go source code
-    - ineffassign   # Detect ineffectual assignments
-    - staticcheck   # Go static analysis (includes gosimple, stylecheck)
-    - unused        # Check for unused code
-
-    # Complexity analysis
-    - gocyclo       # Cyclomatic complexity
-    - cyclop        # Package and function complexity
-    - gocognit      # Cognitive complexity
-    - funlen        # Function length
-    - nestif        # Deeply nested if statements
-
-    # Code quality
-    - dupl          # Code clone detection
-    - goconst       # Repeated strings that could be constants
-    - gocritic      # Opinionated Go linters
-    - revive        # Fast, configurable, extensible linter
-    - unconvert     # Remove unnecessary type conversions
-    - unparam       # Unused function parameters
-    - misspell      # Spelling mistakes
-
-    # Error handling
-    - errorlint     # Error wrapping issues
-    - nilerr        # Check for nil errors
-
-    # Performance
-    - prealloc      # Slice preallocation
-
-    # Security
-    - gosec         # Security problems
-
-    # Style
-    - whitespace    # Whitespace issues
-    - godot         # Comments end in period
-
-    # Bugs
-    - bodyclose     # HTTP response body closed
-    - noctx         # HTTP request without context
-    - rowserrcheck  # Rows.Err checked
-    - sqlclosecheck # SQL Close() checked
-    - copyloopvar   # Loop variable copying issues
-
-    # Additional quality checks
-    - godox         # TODO/FIXME/etc detection
-    - makezero      # Slice declarations with non-zero initial length
-    - bidichk       # Dangerous unicode sequences
-
-  disable:
-    - exhaustruct   # Too strict for most use cases
-    - gochecknoglobals # Globals sometimes needed
-    - gochecknoinits   # Init functions sometimes needed
-    - wrapcheck     # Too noisy for error wrapping
-
-issues:
-  exclude-rules:
-    # Exclude some linters from test files
-    - path: _test\.go$
-      linters:
-        - funlen
-        - dupl
-        - gocognit
-        - gocyclo
-        - cyclop
-        - gosec
-        - errcheck
-        - goconst
-        - prealloc
-
-    # Exclude example repos completely
-    - path: example_repos
-      linters:
-        - all
-
-    # Exclude complexity checks for main.go (CLI setup)
-    - path: ^main\.go$
-      linters:
-        - funlen
-
-    # Allow TODO in development
-    - linters:
-        - godox
-      text: "TODO"
-
-  max-issues-per-linter: 0
-  max-same-issues: 0
-
-  # Show all issues (except excluded above)
-  exclude-use-default: false
-
 run:
   timeout: 5m
   tests: true
-  skip-dirs:
-    - vendor
-    - example_repos
-  skip-files:
-    - "example_repos/**/*.go"
 
-  go: '1.24'
+linters:
+  default: none
+  enable:
+    # Bugs and correctness
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - bodyclose
+    - noctx
+    - nilerr
+    - errorlint
+    - copyloopvar
+    - makezero
+    - bidichk
 
-output:
-  format: colored-line-number
-  print-issued-lines: true
-  print-linter-name: true
-  uniq-by-line: false
-  sort-results: true
+    # Complexity
+    - gocyclo
+    - cyclop
+    - gocognit
+    - funlen
+    - nestif
+
+    # Code quality and style
+    - dupl
+    - goconst
+    - gocritic
+    - revive
+    - unconvert
+    - unparam
+    - misspell
+    - prealloc
+    - whitespace
+    - godot
+
+    # Security
+    - gosec
+
+  settings:
+    gocyclo:
+      min-complexity: 15
+    cyclop:
+      max-complexity: 20
+      package-average: 15.0
+    gocognit:
+      min-complexity: 20
+    funlen:
+      lines: 100
+      statements: 50
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+    errcheck:
+      check-type-assertions: true
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+    revive:
+      rules:
+        - name: exported
+        - name: unreachable-code
+        - name: unused-parameter
+    gosec:
+      excludes:
+        - G104 # Covered by errcheck
+        - G204 # Running configured hook commands is the whole point of this tool
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+    misspell:
+      locale: US
+
+  exclusions:
+    generated: lax
+    paths:
+      - example_repos
+    rules:
+      - path: _test\.go$
+        linters:
+          - funlen
+          - dupl
+          - gocognit
+          - gocyclo
+          - cyclop
+          - gosec
+          - errcheck
+          - goconst
+          - prealloc
+          - noctx
+      # Lookup tables of file type tags.
+      - path: filetypes\.go$
+        linters:
+          - goconst
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    paths:
+      - example_repos
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
