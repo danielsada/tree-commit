@@ -1,6 +1,7 @@
 package main
 
 import (
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -48,9 +49,13 @@ func TestFolderFilters(t *testing.T) {
 		{"src/__pycache__/a.py", []string{"."}, []string{"__pycache__/"}, false},
 		{"helpers/a.py", []string{"."}, []string{"helpers/"}, false},
 		{"src/helpers.py", []string{"."}, []string{"helpers/"}, true},
+		{"a/rebuild/x.js", nil, []string{"build"}, true},
+		{"a/gen/sub/x.go", nil, []string{"/gen/sub/"}, false},
+		{"srcx/a.js", []string{"src"}, nil, false},
 	}
 	for _, tt := range tests {
-		got := folderIncluded(tt.rel, tt.include) && !folderExcluded(tt.rel, tt.exclude)
+		rel := filepath.FromSlash(tt.rel)
+		got := folderIncluded(rel, tt.include) && !folderExcluded(rel, tt.exclude)
 		if got != tt.want {
 			t.Errorf("%s include=%v exclude=%v: got %v, want %v", tt.rel, tt.include, tt.exclude, got, tt.want)
 		}
@@ -73,13 +78,16 @@ func TestCompilePatternVerbose(t *testing.T) {
 }
 
 func TestHookDependencies(t *testing.T) {
-	root := &scope{dir: ""}
+	root := &scope{dir: rootDir}
 	sub := &scope{dir: "go_lib", depth: 1}
 	no := false
 	mk := func(sc *scope, passFiles bool, files ...string) *hookRun {
 		h := &Hook{}
 		if !passFiles {
 			h.PassFilenames = &no
+		}
+		for i, f := range files {
+			files[i] = filepath.FromSlash(f)
 		}
 		return &hookRun{def: &hookDef{scope: sc, hook: h}, files: files}
 	}
@@ -106,10 +114,11 @@ func TestBuildPlanOrdersDeeperConfigsFirst(t *testing.T) {
 		return &Config{Repos: []RepoConfig{repo}}
 	}
 	scopes := []*scope{
-		{dir: "", path: ".tree-commit-config.yaml", config: cfg("validator")},
-		{dir: "frontend", path: "frontend/.tree-commit-config.yaml", depth: 1, config: cfg("formatter", "linter")},
+		{dir: rootDir, path: ".tree-commit-config.yaml", config: cfg("validator")},
+		{dir: "frontend", path: filepath.Join("frontend", ".tree-commit-config.yaml"), depth: 1, config: cfg("formatter", "linter")},
 	}
-	plan := buildPlan(t.TempDir(), scopes, []string{"frontend/src/App.js"}, nil, planOptions{stage: "pre-commit"})
+	file := filepath.Join("frontend", "src", "App.js")
+	plan := buildPlan(t.TempDir(), scopes, []string{file}, nil, planOptions{stage: "pre-commit"})
 
 	var ids []string
 	for _, r := range plan {

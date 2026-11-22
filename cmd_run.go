@@ -134,7 +134,7 @@ func runHooks(ctx context.Context, opts *runOptions, out io.Writer) (int, error)
 	return 0, nil
 }
 
-// selectFiles returns the files to check as slash-separated paths relative to root.
+// selectFiles returns the files to check, relative to root.
 func selectFiles(root, cwd string, opts *runOptions) ([]string, error) {
 	var (
 		files []string
@@ -154,7 +154,7 @@ func selectFiles(root, cwd string, opts *runOptions) ([]string, error) {
 
 	existing := files[:0]
 	for _, f := range files {
-		info, err := os.Lstat(filepath.Join(root, filepath.FromSlash(f)))
+		info, err := os.Lstat(filepath.Join(root, f))
 		if err == nil && !info.IsDir() {
 			existing = append(existing, f)
 		}
@@ -177,11 +177,14 @@ func filesFromArgs(root, cwd string, args []string) ([]string, error) {
 		if realDir, err := filepath.EvalSymlinks(filepath.Dir(abs)); err == nil {
 			abs = filepath.Join(realDir, filepath.Base(abs))
 		}
-		rel, err := filepath.Rel(realRoot, abs)
-		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		if !isWithin(realRoot, abs) {
 			return nil, fmt.Errorf("%s is outside the repository", f)
 		}
-		files = append(files, filepath.ToSlash(rel))
+		rel, err := filepath.Rel(realRoot, abs)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, rel)
 	}
 	return files, nil
 }
@@ -220,8 +223,8 @@ func printPlan(out io.Writer, plan []*hookRun, fileCount int) {
 	deps := hookDependencies(plan)
 	for i, r := range plan {
 		d := r.def
-		cwd := d.scope.dir + "/"
-		if d.scope.dir == "" {
+		cwd := scopeLabel(d.scope.dir)
+		if d.scope.dir == rootDir {
 			cwd = "(repository root)"
 		}
 		fmt.Fprintf(out, "\n%d. %s [id: %s, config: %s]\n", i+1, d.hook.Name, d.id, d.scope.path)

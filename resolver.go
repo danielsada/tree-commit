@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -11,7 +10,7 @@ import (
 
 // scope is a discovered config file together with the directory it governs.
 type scope struct {
-	dir    string // slash-separated directory relative to the repo root ("" for the root)
+	dir    string // directory relative to the repo root (rootDir for the root)
 	path   string // config file path relative to the repo root
 	depth  int
 	config *Config
@@ -42,7 +41,7 @@ type hookDef struct {
 // hookRun is a hook that will be executed, with the files it applies to.
 type hookRun struct {
 	def   *hookDef
-	files []string // slash-separated paths relative to the repo root
+	files []string // paths relative to the repo root
 }
 
 // manifestSource provides hook manifests for remote repositories.
@@ -75,15 +74,9 @@ func scopesFromTree(tree *ConfigTree) ([]*scope, error) {
 	nodes := tree.FlattenConfigs()
 	scopes := make([]*scope, 0, len(nodes))
 	for _, n := range nodes {
-		p := filepath.ToSlash(n.Path)
-		dir := path.Dir(p)
-		if dir == "." {
-			dir = ""
-		}
-		sc := &scope{dir: dir, path: p, config: n.Config}
-		if dir != "" {
-			sc.depth = strings.Count(dir, "/") + 1
-		}
+		p := filepath.Clean(n.Path)
+		dir := filepath.Dir(p)
+		sc := &scope{dir: dir, path: p, depth: pathDepth(dir), config: n.Config}
 		var err error
 		if sc.filesRe, err = compilePattern(n.Config.Files); err != nil {
 			return nil, fmt.Errorf("%s: invalid top-level 'files': %w", p, err)
@@ -191,20 +184,10 @@ func sortRuns(runs []*hookRun) {
 // ancestors returns the scopes whose directory contains file, deepest first.
 func (r *resolver) ancestors(file string) []*scope {
 	var chain []*scope
-	if sc := r.scopes[""]; sc != nil {
-		chain = append(chain, sc)
-	}
-	dir := path.Dir(file)
-	if dir != "." {
-		parts := strings.Split(dir, "/")
-		for i := range parts {
-			if sc := r.scopes[strings.Join(parts[:i+1], "/")]; sc != nil {
-				chain = append(chain, sc)
-			}
+	for _, dir := range ancestorDirs(file) {
+		if sc := r.scopes[dir]; sc != nil {
+			chain = append(chain, sc)
 		}
-	}
-	for i, j := 0, len(chain)-1; i < j; i, j = i+1, j-1 {
-		chain[i], chain[j] = chain[j], chain[i]
 	}
 	return chain
 }
@@ -310,19 +293,21 @@ func (r *resolver) matches(d *hookDef, file string) bool {
 	rel := relToScope(d.scope.dir, file)
 	sc, h := d.scope, d.hook
 
-	if sc.filesRe != nil && !sc.filesRe.MatchString(rel) {
-		return false
-	}
-	if sc.excludeRe != nil && sc.excludeRe.MatchString(rel) {
-		return false
-	}
 	if !folderIncluded(rel, h.IncludeFolders) || folderExcluded(rel, h.ExcludeFolders) {
 		return false
 	}
-	if d.filesRe != nil && !d.filesRe.MatchString(rel) {
+	// Patterns are written with forward slashes, like in pre-commit.
+	pattern := filepath.ToSlash(rel)
+	if sc.filesRe != nil && !sc.filesRe.MatchString(pattern) {
 		return false
 	}
-	if d.excludeRe != nil && d.excludeRe.MatchString(rel) {
+	if sc.excludeRe != nil && sc.excludeRe.MatchString(pattern) {
+		return false
+	}
+	if d.filesRe != nil && !d.filesRe.MatchString(pattern) {
+		return false
+	}
+	if d.excludeRe != nil && d.excludeRe.MatchString(pattern) {
 		return false
 	}
 	if len(h.Types)+len(h.TypesOr)+len(h.ExcludeTypes) == 0 {
@@ -336,7 +321,7 @@ func (r *resolver) tags(file string) map[string]bool {
 	if tags, ok := r.tagMemo[file]; ok {
 		return tags
 	}
-	tags, err := fileTags(filepath.Join(r.root, filepath.FromSlash(file)))
+	tags, err := fileTags(filepath.Join(r.root, file))
 	if err != nil {
 		tags = nil
 	}
@@ -344,21 +329,12 @@ func (r *resolver) tags(file string) map[string]bool {
 	return tags
 }
 
-// relToScope returns file relative to a scope directory (both slash-separated).
-func relToScope(dir, file string) string {
-	if dir == "" {
-		return file
-	}
-	return strings.TrimPrefix(file, dir+"/")
-}
-
+// normalizeFolder converts a folder from a config file ("src/", "./a/b", "/build")
+// into a clean relative path, rootDir meaning "everything".
 func normalizeFolder(folder string) string {
-	f := path.Clean(filepath.ToSlash(strings.TrimSpace(folder)))
-	f = strings.TrimPrefix(f, "./")
-	if f == "." || f == "/" {
-		return ""
-	}
-	return strings.Trim(f, "/")
+	f := filepath.FromSlash(strings.TrimSpace(folder))
+	f = strings.TrimLeft(f, string(filepath.Separator))
+	return filepath.Clean(rootDir + string(filepath.Separator) + f)
 }
 
 // folderIncluded reports whether rel lives in one of the include folders.
@@ -368,24 +344,25 @@ func folderIncluded(rel string, folders []string) bool {
 		return true
 	}
 	for _, folder := range folders {
-		f := normalizeFolder(folder)
-		if f == "" || strings.HasPrefix(rel, f+"/") {
+		if isWithin(normalizeFolder(folder), filepath.Dir(rel)) {
 			return true
 		}
 	}
 	return false
 }
 
-// folderExcluded reports whether any directory component path of rel matches an
-// exclude folder. "build/" excludes build/x and also nested a/build/x.
+// folderExcluded reports whether rel is inside an exclude folder, at any depth:
+// "build/" excludes build/x and also nested a/build/x.
 func folderExcluded(rel string, folders []string) bool {
 	for _, folder := range folders {
 		f := normalizeFolder(folder)
-		if f == "" {
+		if f == rootDir {
 			continue
 		}
-		if strings.HasPrefix(rel, f+"/") || strings.Contains("/"+rel, "/"+f+"/") {
-			return true
+		for _, dir := range ancestorDirs(rel) {
+			if hasPathSuffix(dir, f) {
+				return true
+			}
 		}
 	}
 	return false

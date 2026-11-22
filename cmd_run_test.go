@@ -67,7 +67,7 @@ func TestRunScopeClosestWinsAndDisable(t *testing.T) {
 		"frontend-lint|frontend|src/a.js",
 		"frontend-build|frontend|",
 	})
-	for _, want := range []string{"Frontend lint (frontend/)", "Common", "Passed"} {
+	for _, want := range []string{"Frontend lint (" + scopeLabel("frontend") + ")", "Common", "Passed"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q:\n%s", want, out)
 		}
@@ -251,7 +251,11 @@ func TestRunBuiltinLanguages(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("expected failure, got %d\n%s", code, out)
 	}
-	for _, want := range []string{"pkg/a.go:2:// todo: later", "rejection files are not allowed", "pkg/b.rej"} {
+	for _, want := range []string{
+		filepath.Join("pkg", "a.go") + ":2:// todo: later",
+		"rejection files are not allowed",
+		filepath.Join("pkg", "b.rej"),
+	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q:\n%s", want, out)
 		}

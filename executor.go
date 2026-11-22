@@ -108,13 +108,9 @@ func footprintOf(r *hookRun) footprint {
 	return fp
 }
 
-func underDir(dir, p string) bool {
-	return dir == "" || p == dir || strings.HasPrefix(p, dir+"/")
-}
-
 func (a footprint) conflicts(b footprint) bool {
 	if a.wholeDir && b.wholeDir {
-		return underDir(a.dir, b.dir) || underDir(b.dir, a.dir)
+		return isWithin(a.dir, b.dir) || isWithin(b.dir, a.dir)
 	}
 	if a.wholeDir || b.wholeDir {
 		whole, other := a, b
@@ -122,7 +118,7 @@ func (a footprint) conflicts(b footprint) bool {
 			whole, other = b, a
 		}
 		for f := range other.files {
-			if underDir(whole.dir, f) {
+			if isWithin(whole.dir, f) {
 				return true
 			}
 		}
@@ -192,9 +188,9 @@ func (x *executor) snapshot(r *hookRun) []byte {
 	if !footprintOf(r).wholeDir {
 		return sum
 	}
-	pathspec := ":(top,literal)" + r.def.scope.dir
-	if r.def.scope.dir == "" {
-		pathspec = ":/"
+	pathspec := ":/"
+	if r.def.scope.dir != rootDir {
+		pathspec = ":(top,literal)" + filepath.ToSlash(r.def.scope.dir)
 	}
 	diff, err := gitOutput(x.root, "diff", "--no-ext-diff", "--binary", "--", pathspec)
 	if err != nil {
@@ -228,7 +224,7 @@ func (x *executor) scopeFiles(r *hookRun) []string {
 }
 
 func (x *executor) scopeDir(d *hookDef) string {
-	return filepath.Join(x.root, filepath.FromSlash(d.scope.dir))
+	return filepath.Join(x.root, d.scope.dir)
 }
 
 func (x *executor) runCommand(r *hookRun) *hookResult {
@@ -470,7 +466,7 @@ func hashFiles(root string, files []string) []byte {
 	h := sha256.New()
 	for _, f := range files {
 		_, _ = io.WriteString(h, f+"\x00")
-		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(f))) //nolint:gosec // repo files
+		data, err := os.ReadFile(filepath.Join(root, f)) //nolint:gosec // repo files
 		if err != nil {
 			_, _ = io.WriteString(h, "<missing>")
 			continue
@@ -548,7 +544,7 @@ func (x *executor) runPygrep(r *hookRun) *hookResult {
 	var out bytes.Buffer
 	res := &hookResult{status: statusPassed}
 	for _, f := range r.files {
-		data, err := os.ReadFile(filepath.Join(x.root, filepath.FromSlash(f))) //nolint:gosec // repo files
+		data, err := os.ReadFile(filepath.Join(x.root, f)) //nolint:gosec // repo files
 		if err != nil {
 			continue
 		}
@@ -573,10 +569,10 @@ func (x *executor) paint(s, code string) string {
 }
 
 func hookLabel(d *hookDef) string {
-	if d.scope.dir == "" {
+	if d.scope.dir == rootDir {
 		return d.hook.Name
 	}
-	return fmt.Sprintf("%s (%s/)", d.hook.Name, d.scope.dir)
+	return fmt.Sprintf("%s (%s)", d.hook.Name, scopeLabel(d.scope.dir))
 }
 
 // statusLine pads label with dots so that the status lines up at statusLineWidth.

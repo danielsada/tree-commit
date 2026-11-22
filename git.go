@@ -38,13 +38,13 @@ func repoRoot(dir string) (string, error) {
 }
 
 // stagedFiles returns the added, copied, modified and renamed files in the index,
-// as slash-separated paths relative to the repository root.
+// relative to the repository root.
 func stagedFiles(root string) ([]string, error) {
 	out, err := gitOutput(root, "diff", "--cached", "--name-only", "--diff-filter=ACMR", "--no-ext-diff", "-z")
 	if err != nil {
 		return nil, err
 	}
-	return splitNull(out), nil
+	return gitPaths(out), nil
 }
 
 // trackedFiles returns every file tracked by git, relative to the repository root.
@@ -53,7 +53,7 @@ func trackedFiles(root string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return splitNull(out), nil
+	return gitPaths(out), nil
 }
 
 func splitNull(s string) []string {

@@ -458,6 +458,7 @@ func TestConfigTreeFlattenConfigs(t *testing.T) {
 	}
 
 	for _, expectedPath := range expectedPaths {
+		expectedPath = filepath.FromSlash(expectedPath)
 		found := false
 		for _, actualPath := range paths {
 			if actualPath == expectedPath {

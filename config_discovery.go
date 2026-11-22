@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -111,7 +110,7 @@ func nodeDescription(node *ConfigNode) string {
 	if node.Config == nil {
 		return fmt.Sprintf("📁 %s/", filepath.Base(node.Dir))
 	}
-	dirName := filepath.Base(filepath.Dir(filepath.FromSlash(node.Path)))
+	dirName := filepath.Base(filepath.Dir(node.Path))
 	if dirName == "." && len(node.Children) == 0 {
 		return fmt.Sprintf("📄 %s", filepath.Base(node.Path))
 	}
@@ -143,7 +142,7 @@ func discoverConfigsGit(rootDir string) (*ConfigTree, error) {
 		return nil, err
 	}
 
-	return buildConfigTree(rootDir, selectConfigFiles(splitNull(output)))
+	return buildConfigTree(rootDir, selectConfigFiles(gitPaths(output)))
 }
 
 // discoverConfigsFileSystem uses filepath.WalkDir to find config files.
@@ -186,10 +185,10 @@ func isConfigFileName(name string) bool {
 }
 
 // selectConfigFiles keeps at most one config file per directory, preferring
-// names that appear earlier in configFileNames. Returned paths use forward slashes.
+// names that appear earlier in configFileNames.
 func selectConfigFiles(paths []string) []string {
 	priority := func(p string) int {
-		base := path.Base(p)
+		base := filepath.Base(p)
 		for i, n := range configFileNames {
 			if base == n {
 				return i
@@ -200,11 +199,11 @@ func selectConfigFiles(paths []string) []string {
 
 	best := make(map[string]string)
 	for _, p := range paths {
-		p = filepath.ToSlash(p)
+		p = filepath.Clean(p)
 		if priority(p) < 0 {
 			continue
 		}
-		dir := path.Dir(p)
+		dir := filepath.Dir(p)
 		if cur, ok := best[dir]; !ok || priority(p) < priority(cur) {
 			best[dir] = p
 		}

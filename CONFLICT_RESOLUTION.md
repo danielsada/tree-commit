@@ -45,6 +45,8 @@ In every directory tree-commit looks for `.tree-commit-config.yaml` first and fa
 - `include_folders` / `exclude_folders` are relative to the config's directory.
 - The hook runs **with the config's directory as its working directory**, and receives file names relative to it.
 
+Patterns always use forward slashes (like in pre-commit), on every platform. File names passed to hooks use the platform's native separator (backslashes on Windows).
+
 ```yaml
 # repo/frontend/.tree-commit-config.yaml
 repos:

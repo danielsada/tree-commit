@@ -151,8 +151,13 @@ func readLog(t *testing.T, path string) []string {
 	return lines
 }
 
+// assertLines compares fake hook log lines. File names in want use forward
+// slashes and are converted to native paths, which is what hooks receive.
 func assertLines(t *testing.T, got, want []string) {
 	t.Helper()
+	for i, w := range want {
+		want[i] = filepath.FromSlash(w)
+	}
 	sort.Strings(want)
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("unexpected hook invocations\n got: %q\nwant: %q", got, want)
