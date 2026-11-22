@@ -166,7 +166,7 @@ func (x *executor) execute(r *hookRun) *hookResult {
 		return &hookResult{status: statusSkipped, note: d.skipReason}
 	}
 
-	before := hashFiles(x.root, r.files)
+	before := x.snapshot(r)
 	var res *hookResult
 	switch d.hook.Language {
 	case langFail:
@@ -176,11 +176,34 @@ func (x *executor) execute(r *hookRun) *hookResult {
 	default:
 		res = x.runCommand(r)
 	}
-	if !bytes.Equal(before, hashFiles(x.root, r.files)) {
+	if !bytes.Equal(before, x.snapshot(r)) {
 		res.modified = true
 		res.status = statusFailed
 	}
 	return res
+}
+
+// snapshot fingerprints what a hook may modify: its files and, for hooks that
+// work on their whole directory, the unstaged changes in that directory (like
+// pre-commit's whole-repository `git diff` check). The dependency graph
+// guarantees no other hook touches that directory meanwhile.
+func (x *executor) snapshot(r *hookRun) []byte {
+	sum := hashFiles(x.root, r.files)
+	if !footprintOf(r).wholeDir {
+		return sum
+	}
+	pathspec := ":(top,literal)" + r.def.scope.dir
+	if r.def.scope.dir == "" {
+		pathspec = ":/"
+	}
+	diff, err := gitOutput(x.root, "diff", "--no-ext-diff", "--binary", "--", pathspec)
+	if err != nil {
+		diff = "error: " + err.Error()
+	}
+	h := sha256.New()
+	_, _ = h.Write(sum)
+	_, _ = io.WriteString(h, diff)
+	return h.Sum(nil)
 }
 
 func failOutput(entry string, files []string) []byte {

@@ -258,6 +258,29 @@ func TestRunBuiltinLanguages(t *testing.T) {
 	}
 }
 
+func TestRunDetectsChangesFromWholeDirectoryHooks(t *testing.T) {
+	dir := newRepo(t, map[string]string{
+		"gen/.tree-commit-config.yaml": fmt.Sprintf(`repos:
+  - repo: local
+    hooks:
+      - id: generate
+        name: Generate code
+        entry: %q
+        always_run: true
+        pass_filenames: false
+`, helperEntry(t, "@modify", "generated.go")),
+		"gen/generated.go": "package gen\n",
+		"gen/input.txt":    "x\n",
+	})
+	runGit(t, dir, "add", ".")
+
+	// generated.go is not passed to the hook, but the hook rewrites it.
+	code, out := runInRepo(t, dir, &runOptions{files: []string{filepath.Join(dir, "gen", "input.txt")}})
+	if code != 1 || !strings.Contains(out, "files were modified by this hook") {
+		t.Fatalf("expected the modification to be detected, got %d\n%s", code, out)
+	}
+}
+
 func TestRunWithoutConfig(t *testing.T) {
 	dir := newRepo(t, map[string]string{"a.txt": "a\n"})
 	runGit(t, dir, "add", ".")

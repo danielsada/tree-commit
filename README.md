@@ -63,7 +63,7 @@ Then, in your repository:
 tree-commit install      # installs .git/hooks/pre-commit
 ```
 
-An existing pre-commit hook is kept as `pre-commit.legacy` and still runs first. `tree-commit uninstall` restores it. `core.hooksPath` and git worktrees are supported.
+An existing hook is kept as `pre-commit.tree-commit-legacy` and still runs first (a hook installed by the pre-commit framework is kept but not run, since tree-commit reads `.pre-commit-config.yaml` itself). `tree-commit uninstall` restores it. `core.hooksPath` and git worktrees are supported.
 
 ## Configuration
 
@@ -131,7 +131,7 @@ tree-commit tree                   # show the config tree of the repository
 SKIP=go-test,eslint git commit     # skip hooks by id, like pre-commit
 ```
 
-`run` exits with status 1 when any hook fails or modifies files. Other flags: `--jobs`, `--verbose`, `--color`, `--hook-stage`, and `-c/--config` to use a different config file name.
+`run` exits with status 1 when any hook fails or modifies files (for `pass_filenames: false` hooks, any change to tracked files in their directory counts). Other flags: `--jobs`, `--verbose`, `--color`, `--hook-stage`, and `-c/--config` to use a different config file name.
 
 ## Limitations
 
