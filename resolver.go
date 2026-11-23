@@ -224,6 +224,9 @@ func (r *resolver) defsFor(sc *scope) []*hookDef {
 func (r *resolver) resolveHook(sc *scope, repo *RepoConfig, raw map[string]any) *hookDef {
 	id, _ := raw["id"].(string)
 	d := &hookDef{id: id, scope: sc, repo: repo.Repo, rev: repo.Rev}
+	if repo.Repo == repoBuiltin {
+		d.repo, d.rev = builtinHooksRepo, builtinHooksRev
+	}
 	fallback := func(err error) *hookDef {
 		name, _ := raw["name"].(string)
 		if name == "" {

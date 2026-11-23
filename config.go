@@ -14,8 +14,14 @@ const (
 	preCommitConfigFile  = ".pre-commit-config.yaml"
 	manifestFile         = ".pre-commit-hooks.yaml"
 
-	repoLocal = "local"
-	repoMeta  = "meta"
+	repoLocal   = "local"
+	repoMeta    = "meta"
+	repoBuiltin = "builtin"
+
+	// prek's `repo: builtin` provides native versions of these hooks; tree-commit
+	// runs them from this release of the original repository.
+	builtinHooksRepo = "https://github.com/pre-commit/pre-commit-hooks"
+	builtinHooksRev  = "v6.0.0"
 
 	langSystem = "system"
 	langScript = "script"
@@ -130,7 +136,7 @@ func (c *Config) validate() error {
 		if repo.Repo == "" {
 			return fmt.Errorf("repos[%d]: missing required field 'repo'", i)
 		}
-		if repo.Repo != repoLocal && repo.Repo != repoMeta && repo.Rev == "" {
+		if repo.Repo != repoLocal && repo.Repo != repoMeta && repo.Repo != repoBuiltin && repo.Rev == "" {
 			return fmt.Errorf("repos[%d] (%s): missing required field 'rev'", i, repo.Repo)
 		}
 		// Both values are passed to git; a leading dash would be parsed as an option

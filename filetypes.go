@@ -10,43 +10,6 @@ import (
 	"strings"
 )
 
-// extensionTags maps file extensions to identify-style type tags. It covers the
-// tags used by the most common pre-commit hook repositories.
-var extensionTags = map[string][]string{
-	"bash": {"text", "shell", "bash"}, "bat": {"text", "batch"},
-	"c": {"text", "c"}, "cc": {"text", "c++"}, "cfg": {"text"}, "cpp": {"text", "c++"},
-	"cs": {"text", "c#"}, "css": {"text", "css"}, "csv": {"text", "csv"},
-	"go": {"text", "go"}, "gif": {"binary", "image", "gif"}, "gradle": {"text", "groovy"},
-	"h": {"text", "header", "c"}, "hpp": {"text", "header", "c++"}, "html": {"text", "html"},
-	"ini": {"text", "ini"}, "java": {"text", "java"}, "jpeg": {"binary", "image", "jpeg"},
-	"jpg": {"binary", "image", "jpeg"}, "js": {"text", "javascript"}, "json": {"text", "json"},
-	"jsx": {"text", "jsx"}, "kt": {"text", "kotlin"}, "lua": {"text", "lua"},
-	"md": {"text", "markdown"}, "mjs": {"text", "javascript"}, "php": {"text", "php"},
-	"png": {"binary", "image", "png"}, "proto": {"text", "proto"}, "ps1": {"text", "powershell"},
-	"py": {"text", "python"}, "pyi": {"text", "pyi"}, "rb": {"text", "ruby"},
-	"rs": {"text", "rust"}, "rst": {"text", "rst"}, "scss": {"text", "scss"},
-	"sh": {"text", "shell", "sh"}, "sql": {"text", "sql"}, "svg": {"text", "image", "svg", "xml"},
-	"swift": {"text", "swift"}, "tf": {"text", "terraform"}, "toml": {"text", "toml"},
-	"ts": {"text", "ts"}, "tsx": {"text", "tsx"}, "txt": {"text", "plain-text"},
-	"xml": {"text", "xml"}, "yaml": {"text", "yaml"}, "yml": {"text", "yaml"},
-	"zip": {"binary", "zip"}, "zsh": {"text", "shell", "zsh"},
-}
-
-// nameTags maps well-known file names to type tags.
-var nameTags = map[string][]string{
-	"Dockerfile": {"text", "dockerfile"},
-	"Makefile":   {"text", "makefile"},
-	"go.mod":     {"text", "go-mod"},
-	"go.sum":     {"text", "go-sum"},
-}
-
-// interpreterTags maps shebang interpreters to type tags.
-var interpreterTags = map[string][]string{
-	"bash": {"shell", "bash"}, "sh": {"shell", "sh"}, "zsh": {"shell", "zsh"},
-	"python": {"python"}, "python3": {"python", "python3"},
-	"node": {"javascript"}, "ruby": {"ruby"}, "perl": {"perl"},
-}
-
 // fileTags returns the identify-style tags for a file (file/symlink, text/binary,
 // executable/non-executable, plus language tags from the name, extension and shebang).
 func fileTags(path string) (map[string]bool, error) {
@@ -77,19 +40,17 @@ func fileTags(path string) (map[string]bool, error) {
 	}
 	if executable {
 		tags["executable"] = true
-		for _, t := range interpreterTags[shebangInterpreter(head)] {
-			tags[t] = true
-		}
 	} else {
 		tags["non-executable"] = true
 	}
 
-	base := filepath.Base(path)
-	for _, t := range nameTags[base] {
-		tags[t] = true
-	}
-	if ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(base), ".")); ext != "" {
-		for _, t := range extensionTags[ext] {
+	// Like identify, only look at the shebang when the name says nothing.
+	if nameTags := tagsFromFilename(filepath.Base(path)); len(nameTags) > 0 {
+		for t := range nameTags {
+			tags[t] = true
+		}
+	} else if executable {
+		for _, t := range tagsFromInterpreter(shebangInterpreter(head)) {
 			tags[t] = true
 		}
 	}
@@ -102,6 +63,47 @@ func fileTags(path string) (map[string]bool, error) {
 		}
 	}
 	return tags, nil
+}
+
+// tagsFromFilename returns the tags implied by a file name: a well-known name
+// (also as a dot-separated part, so "Dockerfile.dev" is a Dockerfile) and the
+// extension.
+func tagsFromFilename(name string) map[string]bool {
+	tags := map[string]bool{}
+	for _, part := range append([]string{name}, strings.Split(name, ".")...) {
+		if known, ok := nameTags[part]; ok {
+			for _, t := range known {
+				tags[t] = true
+			}
+			break
+		}
+	}
+	if ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(name), ".")); ext != "" {
+		known, ok := extensionTags[ext]
+		if !ok {
+			known = extensionTagsNeedBinaryCheck[ext]
+		}
+		for _, t := range known {
+			tags[t] = true
+		}
+	}
+	return tags
+}
+
+// tagsFromInterpreter returns the tags for a shebang interpreter, dropping
+// version suffixes until one is known: python3.12 -> python3 -> python.
+func tagsFromInterpreter(interp string) []string {
+	for interp != "" {
+		if tags, ok := interpreterTags[interp]; ok {
+			return tags
+		}
+		i := strings.LastIndex(interp, ".")
+		if i < 0 {
+			break
+		}
+		interp = interp[:i]
+	}
+	return nil
 }
 
 func readHead(path string, n int) ([]byte, error) {

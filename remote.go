@@ -191,33 +191,92 @@ func (c *repoCache) buildPythonEnv(envDir, repoDir string, deps []string) error 
 		if fileExists(filepath.Join(envDir, readyMarker)) {
 			return nil
 		}
+		uv := uvExecutable()
 		python, err := c.findPython()
-		if err != nil {
+		if err != nil && uv == "" {
 			return err
 		}
 		if err := os.RemoveAll(envDir); err != nil {
 			return err
 		}
 		fmt.Fprintf(os.Stderr, "[tree-commit] Creating python environment %s\n", filepath.Base(envDir))
-		if out, err := exec.CommandContext(context.Background(), python, "-m", "venv", envDir).CombinedOutput(); err != nil {
-			return fmt.Errorf("failed to create virtualenv: %w\n%s", err, out)
+		if err := createVirtualenv(uv, python, envDir); err != nil {
+			return err
 		}
-
 		if repoDir != "" || len(deps) > 0 {
-			args := []string{"-m", "pip", "install", "--disable-pip-version-check", "-q"}
+			packages := append([]string(nil), deps...)
 			if repoDir != "" {
-				args = append(args, repoDir)
+				packages = append([]string{repoDir}, packages...)
 			}
-			args = append(args, deps...)
-			pip := exec.CommandContext(context.Background(), venvPython(envDir), args...)
-			pip.Env = noGitEnv()
-			if out, err := pip.CombinedOutput(); err != nil {
+			if err := installPackages(uv, envDir, packages); err != nil {
 				_ = os.RemoveAll(envDir)
-				return fmt.Errorf("pip install failed: %w\n%s", err, out)
+				return err
 			}
 		}
 		return os.WriteFile(filepath.Join(envDir, readyMarker), nil, 0o600)
 	})
+}
+
+// uvExecutable returns the uv executable used to build Python environments, or
+// "" to use python's own venv and pip. $TREE_COMMIT_UV selects a uv binary, or
+// disables uv with 0/false/no/off. uv is much faster and does not need the
+// ensurepip module, which Debian and Ubuntu only ship in python3-venv.
+func uvExecutable() string {
+	setting := strings.TrimSpace(os.Getenv("TREE_COMMIT_UV"))
+	switch strings.ToLower(setting) {
+	case "0", "false", "no", "off":
+		return ""
+	case "":
+		if p, err := exec.LookPath("uv"); err == nil {
+			return p
+		}
+		return ""
+	default:
+		return setting
+	}
+}
+
+// runSetup runs an environment setup command and reports its output on failure.
+func runSetup(what, name string, args ...string) error {
+	cmd := exec.CommandContext(context.Background(), name, args...)
+	cmd.Env = noGitEnv()
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("%s failed: %w\n%s", what, err, out)
+	}
+	return nil
+}
+
+// createVirtualenv creates a virtual environment with uv when available
+// (python may then be "": uv finds or downloads an interpreter), otherwise with
+// python's venv module, falling back to the virtualenv package.
+func createVirtualenv(uv, python, envDir string) error {
+	if uv != "" {
+		args := []string{"venv", "--quiet"}
+		if python != "" {
+			args = append(args, "--python", python)
+		}
+		return runSetup("creating the virtualenv with uv", uv, append(args, envDir)...)
+	}
+	err := runSetup("creating the virtualenv", python, "-m", "venv", envDir)
+	if err == nil {
+		return nil
+	}
+	if runSetup("creating the virtualenv", python, "-m", "virtualenv", envDir) == nil {
+		return nil
+	}
+	return fmt.Errorf("%w\nInstall uv (https://docs.astral.sh/uv/), or the venv module "+
+		"(the python3-venv package on Debian and Ubuntu)", err)
+}
+
+// installPackages installs packages (paths or requirement specifiers) into a virtualenv.
+func installPackages(uv, envDir string, packages []string) error {
+	const install = "install"
+	if uv != "" {
+		args := append([]string{"pip", install, "--quiet", "--python", venvPython(envDir)}, packages...)
+		return runSetup("uv pip install", uv, args...)
+	}
+	args := append([]string{"-m", "pip", install, "--disable-pip-version-check", "-q"}, packages...)
+	return runSetup("pip install", venvPython(envDir), args...)
 }
 
 // findPython locates a working Python 3 interpreter ($TREE_COMMIT_PYTHON overrides).

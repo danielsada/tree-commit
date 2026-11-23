@@ -14,9 +14,11 @@ import (
 // handling can be tested without python or network access. It prints
 // $FAKE_PY_VERSION for "-c <code>", and "-m venv DIR" creates an empty DIR (or
 // fails when $FAKE_VENV_FAIL is 1). The environments it creates contain no
-// interpreter, so installing packages into them fails.
+// interpreter, so installing packages into them fails. uv is disabled, since it
+// would inspect the fake interpreter.
 func fakePython(t *testing.T) string {
 	t.Helper()
+	t.Setenv("TREE_COMMIT_UV", "0")
 	dir := t.TempDir()
 	if runtime.GOOS == windows {
 		p := filepath.Join(dir, "fakepython.cmd")
@@ -140,7 +142,7 @@ func TestPythonEnv(t *testing.T) {
 
 	t.Setenv("FAKE_VENV_FAIL", "1")
 	if _, err := c.pythonEnv("", []string{"other"}); err == nil ||
-		!strings.Contains(err.Error(), "failed to create virtualenv") || !strings.Contains(err.Error(), "venv exploded") {
+		!strings.Contains(err.Error(), "creating the virtualenv failed") || !strings.Contains(err.Error(), "venv exploded") {
 		t.Errorf("expected virtualenv failure with its output, got %v", err)
 	}
 
@@ -173,7 +175,7 @@ func TestRunPythonHookEnvironmentFailure(t *testing.T) {
 	runGit(t, dir, "add", ".")
 
 	code, out := runInRepo(t, dir, &runOptions{allFiles: true})
-	if code != 1 || !strings.Contains(out, "- error: failed to create virtualenv") {
+	if code != 1 || !strings.Contains(out, "- error: creating the virtualenv failed") {
 		t.Fatalf("expected the environment error to be reported, got %d\n%s", code, out)
 	}
 }
