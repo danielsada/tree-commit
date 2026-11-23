@@ -1,12 +1,12 @@
 # How tree-commit decides what runs
 
-tree-commit uses a **scope-based execution model** with **closest-wins** conflict resolution. Hooks only run on files within their scope, and nested configurations can override parent configurations. This keeps monorepos fast and lets every team own its own checks.
+tree-commit uses a **scope-based execution model** with **closest-wins** conflict resolution. A hook runs only on the files in its scope. A nested config file can override the hooks of a parent config file. This keeps monorepos fast, and each team can own its checks.
 
 ## Core Principles
 
 ### 1. Scope-Based Execution
 
-**Rule**: A hook only runs on a changed file if its configuration file lives in an ancestor directory of that file.
+**Rule**: A hook runs on a changed file only if its config file is in an ancestor directory of that file.
 
 ```
 repo/
@@ -19,31 +19,31 @@ repo/
     api.py                      (CHANGED)
 ```
 
-**For changed file `frontend/src/App.js`**:
+**For the changed file `frontend/src/App.js`**:
 - ✅ Hook A runs (ancestor: `repo/`)
 - ✅ Hook B runs (ancestor: `repo/frontend/`)
 - ❌ Hook C does NOT run (not an ancestor)
 
-**For changed file `backend/api.py`**:
+**For the changed file `backend/api.py`**:
 - ✅ Hook A runs (ancestor: `repo/`)
 - ❌ Hook B does NOT run (not an ancestor)
 - ✅ Hook C runs (ancestor: `repo/backend/`)
 
-**Benefit**: Irrelevant hooks never run, which improves performance and reduces noise.
+**Benefit**: Hooks that do not apply to a file never run. This improves performance and reduces noise.
 
-In every directory tree-commit looks for `.tree-commit-config.yaml` first and falls back to `.pre-commit-config.yaml`, so an existing pre-commit setup works unchanged as a root config.
+In each directory, tree-commit looks for `.tree-commit-config.yaml` first. If that file does not exist, tree-commit uses `.pre-commit-config.yaml`. Thus, an existing pre-commit config file works without changes as a root config file.
 
 ---
 
 ### 2. Relative Paths and Working Directory
 
-**Rule**: Everything in a nested config is **relative to the config's directory**:
+**Rule**: All paths in a nested config file are **relative to the directory of the config file**:
 
-- `files` / `exclude` regexes (and the top-level `files` / `exclude`) are matched against the path relative to the config's directory.
-- `include_folders` / `exclude_folders` are relative to the config's directory.
-- The hook runs **with the config's directory as its working directory**, and receives file names relative to it.
+- tree-commit matches the `files` / `exclude` regexes (and the top-level `files` / `exclude`) against the path relative to the directory of the config file.
+- `include_folders` / `exclude_folders` are relative to the directory of the config file.
+- The hook runs **with the directory of the config file as its working directory**. It receives file names relative to that directory.
 
-Patterns always use forward slashes (like in pre-commit), on every platform. File names passed to hooks use the platform's native separator (backslashes on Windows).
+Patterns always use forward slashes on all platforms, as in pre-commit. The file names that tree-commit passes to hooks use the native separator of the platform (backslashes on Windows).
 
 ```yaml
 # repo/frontend/.tree-commit-config.yaml
@@ -58,24 +58,24 @@ repos:
         # Runs as: (cd frontend && eslint --fix src/components/Button.js)
 ```
 
-For a config at the repository root this is exactly pre-commit's behavior. For nested configs it means `go test ./...`, `tsc --noEmit` or `pytest` run in the project they belong to.
+For a config file at the repository root, this is the same as the pre-commit behavior. For a nested config file, commands such as `go test ./...`, `tsc --noEmit` or `pytest` run in the project that they belong to.
 
-**Benefit**: Config files are portable and work the same wherever the project lives in the repository.
+**Benefit**: Config files are portable. They work the same in all locations in the repository.
 
-#### Folder filters
+#### Directory filters
 
 tree-commit adds two optional hook fields:
 
-- `include_folders`: the file must be inside one of these folders. An empty list or `.` means everything.
-- `exclude_folders`: the file must not be inside one of these folders. `build/` excludes `build/x.js` and also nested `pkg/build/x.js`.
+- `include_folders`: the file must be in one of these directories. An empty list or `.` matches all files.
+- `exclude_folders`: the file must not be in one of these directories. `build/` excludes `build/x.js` and also the nested `pkg/build/x.js`.
 
-They are applied together with `files`, `exclude`, `types`, `types_or` and `exclude_types`. As in pre-commit, `types` defaults to `[file]`, so symlinks are only passed to hooks that ask for them.
+tree-commit applies these filters together with `files`, `exclude`, `types`, `types_or` and `exclude_types`. As in pre-commit, the default value of `types` is `[file]`. Thus, tree-commit passes symlinks only to hooks that ask for them.
 
 ---
 
 ### 3. Closest-Wins Conflict Resolution
 
-**Rule**: When several ancestor configs define hooks with the same `id`, only the hook(s) from the **closest** config to the changed file apply to that file.
+**Rule**: More than one ancestor config file can define hooks with the same `id`. For a changed file, only the hooks from the config file **closest** to that file apply.
 
 ```
 repo/
@@ -88,31 +88,31 @@ repo/
 ```
 
 **Resolution for `frontend/src/App.js`**:
-- Both configs are ancestors
-- Both define hook `id: eslint`
-- `frontend/.tree-commit-config.yaml` is closer, so **its `eslint` hook executes**
-- The root `eslint` is skipped for this file
+- Both config files are ancestors.
+- Both config files define the hook `id: eslint`.
+- `frontend/.tree-commit-config.yaml` is closer, so **its `eslint` hook runs**.
+- tree-commit skips the root `eslint` hook for this file.
 
-The override replaces the whole definition: if the closer hook's `files` pattern does not match a file, the parent's hook does not run on it either. Within a single config file the same id may appear several times (for example the same linter with different `args`), and all of those entries apply.
+The override replaces the full definition. If the `files` pattern of the closer hook does not match a file, the parent hook also does not run on that file. In one config file, the same id can occur more than one time, for example the same linter with different `args`. In this case, all of these entries apply.
 
 **Rationale**:
-- Teams can override project-wide defaults
-- More specific configurations take precedence
-- Intuitive: "closer to code = more specific = higher priority"
+- Teams can override project-wide defaults.
+- More specific config files have priority.
+- The rule is intuitive: "closer to the code = more specific = higher priority".
 
 ---
 
 ### 4. Parallel Execution Without Conflicts
 
-**Rule**: Hooks run in parallel unless they operate on the same file(s). Hooks that share files run one after the other, in execution order (see below).
+**Rule**: Hooks run in parallel, unless they operate on the same files. Hooks that share files run one after the other, in the execution order (refer to the next section).
 
-Overlap detection is based on **the actual files each hook will receive**, not on static regex analysis:
+tree-commit finds overlaps from **the files that each hook actually receives**. It does not do a static analysis of the regexes. tree-commit uses this procedure:
 
-1. Build a map of `hook → [files it will operate on]`.
-2. A hook that shares a file with an earlier hook waits for that hook to finish.
-3. Every other hook starts as soon as a worker is free (`--jobs`, default: number of CPUs).
+1. tree-commit makes a map of `hook → [files it will operate on]`.
+2. A hook that shares a file with an earlier hook waits until that hook is complete.
+3. All other hooks start when a worker is available (`--jobs`, default: the number of CPUs).
 
-Hooks with `pass_filenames: false` (and `always_run` hooks without files) are treated as operating on their **whole directory**, so they wait for every earlier hook that touches a file inside that directory. That way `go test ./...` never runs while `gofmt -w` is rewriting the same package.
+tree-commit treats a hook with `pass_filenames: false` as a hook that operates on its **whole directory**. The same applies to an `always_run` hook without files. Such a hook waits for all earlier hooks that touch a file in that directory. Thus, `go test ./...` never runs while `gofmt -w` writes changes to the same package.
 
 **Example**:
 
@@ -132,21 +132,21 @@ Execution:
 ```
 
 **Benefits**:
-- Maximizes parallelism for performance
-- No file corruption from concurrent writes
-- No complex regex overlap analysis needed
+- Maximum parallelism, for better performance.
+- No file corruption from concurrent writes.
+- No need for a complex analysis of regex overlaps.
 
-Use `tree-commit run --dry-run` to see the plan, including which hook runs after which.
+To see the plan, run `tree-commit run --dry-run`. The plan shows which hook runs after which other hook.
 
 ---
 
 ## Execution Order
 
-When hooks must run serially (they operate on the same files), the order is:
+If hooks must run one after the other (because they operate on the same files), the order is:
 
-1. **Config depth**: deeper configs run first (closest to the code)
-2. **Config path**: alphabetical, for configs at the same depth
-3. **Definition order** within the same config file
+1. **Config depth**: deeper config files run first (closest to the code).
+2. **Config path**: alphabetical order, for config files at the same depth.
+3. **Definition order** in the same config file.
 
 **Example**:
 
@@ -165,12 +165,12 @@ repos:
       - id: validator    # Runs 3rd (shallower config)
 ```
 
-For a changed file `frontend/src/App.js`, execution order:
-1. `formatter` (from frontend/, first in file)
-2. `linter` (from frontend/, second in file)
-3. `validator` (from repo/, parent config)
+For the changed file `frontend/src/App.js`, the execution order is:
+1. `formatter` (from frontend/, first in the file)
+2. `linter` (from frontend/, second in the file)
+3. `validator` (from repo/, parent config file)
 
-Output is always printed in this order, even when hooks run in parallel.
+tree-commit always prints the output in this order, also when hooks run in parallel.
 
 ---
 
@@ -239,7 +239,7 @@ repos:
 
 #### Step 1: Scope Resolution
 
-For each changed file, find ancestor configs:
+For each changed file, tree-commit finds the ancestor config files:
 
 - `frontend/src/App.js`, `frontend/src/utils.js`: `repo/`, `repo/frontend/`
 - `backend/api.py`: `repo/`, `repo/backend/`
@@ -247,22 +247,23 @@ For each changed file, find ancestor configs:
 
 #### Step 2: Closest-Wins and Matching
 
-For `frontend/src/*.js`:
-- `eslint` is defined by `repo/frontend/` and `repo/`: **frontend wins**
+For `frontend/src/*.js`, these hooks apply:
+- `eslint` from `repo/frontend/`. `repo/` also defines `eslint`, but **frontend wins**.
 - `prettier` from `repo/frontend/`
 - `trailing-whitespace` from `repo/`
 
-For `backend/api.py`:
+For `backend/api.py`, these hooks apply:
 - `black`, `flake8` from `repo/backend/`
 - `trailing-whitespace` from `repo/`
-- root `eslint` does not match `\.py$`
 
-For `docs/README.md`:
+The root `eslint` hook does not apply to `backend/api.py`, because its `files` pattern (`\.js$`) does not match `.py` files.
+
+For `docs/README.md`, this hook applies:
 - `trailing-whitespace` from `repo/`
 
 #### Step 3: Hook → Files
 
-In execution order (deeper configs first, then path, then definition order):
+This list shows each hook and its files in the execution order (deeper config files first, then path, then definition order):
 
 ```
 1. black               (backend/)  → [api.py]
@@ -304,7 +305,7 @@ repo/
 
 **Changed file**: `experimental/ml/model.py`
 
-**Result**: Uses `black --line-length 120` from `experimental/` config (closer wins)
+**Result**: tree-commit uses `black --line-length 120` from the `experimental/` config file, because the closest config file wins.
 
 ### Example 2: Same Hook, Different Scopes
 
@@ -327,13 +328,13 @@ repo/
 - `frontend/App.js` → runs `npm test` (from frontend/)
 - `backend/api.py` → runs `pytest` (from backend/)
 
-No conflict! Same hook ID in different scopes.
+There is no conflict, because the two hooks with the same ID are in different scopes.
 
 ---
 
 ## Repository Version Conflicts
 
-Different configurations can reference the same external repository at different revisions. Each `repo@rev` is cloned (and its environment built) separately and cached.
+Different config files can refer to the same hook repository at different revisions. tree-commit clones each `repo@rev` and installs its environment separately, and keeps each one in the cache.
 
 ```yaml
 # frontend/.tree-commit-config.yaml
@@ -351,13 +352,13 @@ repos:
       - id: trailing-whitespace
 ```
 
-**Resolution**: frontend files are checked with v4.4.0 and backend files with v4.5.0. A root config defining the same id would be overridden in both directories.
+**Resolution**: tree-commit checks frontend files with v4.4.0 and backend files with v4.5.0. If a root config file defines the same id, these two config files override it in both directories.
 
 ---
 
-## Disabling Inherited Hooks
+## Disable Inherited Hooks
 
-To disable a hook defined in a parent config, redefine its id with `disable: true`:
+To disable a hook from a parent config file, define its id again with `disable: true`:
 
 ```yaml
 # repo/.tree-commit-config.yaml
@@ -375,26 +376,26 @@ repos:
         disable: true  # Disables the inherited hook for experimental/
 ```
 
-A disabled hook needs no `entry`. It still claims the id, so the parent hook does not run on files under `experimental/`.
+A disabled hook does not need an `entry`. It still owns the id. Thus, the parent hook does not run on files in `experimental/`.
 
-To skip hooks for a single run, use pre-commit's `SKIP` variable: `SKIP=strict-linter,eslint git commit`.
+To skip hooks for one run, use the `SKIP` variable, as in pre-commit: `SKIP=strict-linter,eslint git commit`.
 
 ---
 
 ## Error Handling
 
 ### Configuration Errors
-- **Invalid YAML or missing required fields** (`repo`, `rev`, hook `id`, local `entry`): tree-commit stops with an error naming the file. A broken config should never silently turn checks off.
-- **Invalid regular expression in a hook**: that hook is reported as failed.
-- **Unknown hook id in a remote repository**: that hook is reported as failed.
+- **Invalid YAML or missing required fields** (`repo`, `rev`, hook `id`, local `entry`): tree-commit stops and shows an error with the file name. A broken config file must not silently disable checks.
+- **Invalid regular expression in a hook**: tree-commit reports that hook as `Failed`.
+- **Unknown hook id in a hook repository**: tree-commit reports that hook as `Failed`.
 
 ### Runtime Errors
-- **Repository clone or environment install fails** (network, missing python): the affected hooks are reported as failed, other hooks still run.
-- **Hook exits non-zero or modifies files**: the hook is reported as failed, other hooks still run.
-- **Executable not found**: the hook is reported as failed.
-- **Unsupported language in a remote repository** (anything other than `system`, `script`, `python`, `pygrep` and `fail`): the hook is reported as skipped.
+- **Repository clone or environment installation fails** (network, missing python): tree-commit reports the affected hooks as `Failed`. Other hooks still run.
+- **Hook exits with a non-zero code or changes files**: tree-commit reports the hook as `Failed`. Other hooks still run.
+- **Executable not found**: tree-commit reports the hook as `Failed`.
+- **Unsupported language in a hook repository** (all languages other than `system`, `script`, `python`, `pygrep` and `fail`): tree-commit reports the hook as `Skipped`.
 
-**Philosophy**: One broken hook does not stop the others from running, so you see every problem at once, but any failure blocks the commit.
+**Philosophy**: One broken hook does not stop the other hooks. Thus, you see all problems in one run. But any failure blocks the commit.
 
 ---
 
@@ -413,7 +414,9 @@ To skip hooks for a single run, use pre-commit's `SKIP` variable: `SKIP=strict-l
 - id: format
 ```
 
-### 2. Leverage Scope-Based Architecture
+### 2. Use the Scope-Based Model
+
+Put project-wide rules in the root config file, and rules for one project in a nested config file:
 
 ```yaml
 # repo/.tree-commit-config.yaml - Project-wide rules
@@ -435,13 +438,15 @@ repos:
 
 ### 3. Pin Repository Revisions
 
+Pin each hook repository to a fixed revision:
+
 ```yaml
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0  # Pinned version, not 'main' or 'latest'
 ```
 
-Revisions are cached by `repo@rev`, so a moving branch name will not be refetched. Run `tree-commit clean` to clear the cache.
+tree-commit caches revisions by `repo@rev`. Thus, if `rev` is a branch name and the branch moves, tree-commit does not fetch it again. To clear the cache, run `tree-commit clean`.
 
 ### 4. Design File Patterns for Parallelism
 
@@ -475,11 +480,15 @@ repos:
 
 ## Future Enhancements
 
+NOTE: The features in this section are not available yet. They are possible changes for future versions.
+
 ### Per-file Serial Chains
 
-Today a hook runs once with all of its files and waits for any earlier hook that shares one of them. A finer-grained scheduler could build one serial chain per file and run chains in parallel, so `trailing-whitespace` on `docs/` would not wait for `eslint` on `frontend/`.
+Today, a hook runs one time with all of its files. It waits for each earlier hook that shares one of these files. A more precise scheduler could make one serial chain for each file and run the chains in parallel. Then `trailing-whitespace` on `docs/` would not wait for `eslint` on `frontend/`.
 
 ### Explicit Priority
+
+A `priority` field could set the order of hooks:
 
 ```yaml
 hooks:
@@ -492,6 +501,8 @@ hooks:
 
 ### Dependency Declaration
 
+A `depends_on` field could make a hook run only after another hook succeeds:
+
 ```yaml
 hooks:
   - id: linter
@@ -499,6 +510,8 @@ hooks:
 ```
 
 ### Conditional Execution
+
+A `run_if` field could make a hook run only when a condition is true:
 
 ```yaml
 hooks:

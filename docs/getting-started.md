@@ -1,23 +1,25 @@
 # Getting started
 
-This walkthrough sets up tree-commit in a small repository with a Python backend and a shared set of checks. It takes about five minutes.
+This walkthrough shows how to install and configure tree-commit in a small repository. The repository has a Python backend and a set of hooks for all files. It takes approximately five minutes.
 
 ## 1. Install tree-commit
 
 You need git and [Go](https://go.dev/dl/) 1.23 or newer.
+
+Run these commands to install tree-commit and make sure that it works:
 
 ```sh
 go install github.com/danielsada/tree-commit@latest
 tree-commit --version
 ```
 
-If `tree-commit` is not found, add Go's bin directory to your `PATH`. It is `$(go env GOPATH)/bin`, usually `~/go/bin`.
+If your shell cannot find `tree-commit`, add the Go bin directory to your `PATH`. This directory is `$(go env GOPATH)/bin`, usually `~/go/bin`.
 
-The examples below also use [uv](https://docs.astral.sh/uv/getting-started/installation/) to run Python tools without installing them globally. Hooks from remote repositories that are written in Python need Python 3.
+The examples below also use [uv](https://docs.astral.sh/uv/getting-started/installation/) to run Python tools. With uv, you do not have to install these tools globally. Remote hooks that are written in Python need Python 3.
 
-## 2. Add a config for the whole repository
+## 2. Add a config file for the full repository
 
-Create `.tree-commit-config.yaml` at the root of your repository. These hooks apply to every file:
+Create a `.tree-commit-config.yaml` file at the root of your repository, with this content. These hooks apply to all files:
 
 ```yaml
 repos:
@@ -30,11 +32,11 @@ repos:
       - id: check-merge-conflict
 ```
 
-These hooks come from another git repository. tree-commit downloads it once, at the version given in `rev`, and caches it.
+These hooks come from a different git repository (a hook repository). tree-commit downloads this repository one time, at the version in `rev`, and keeps it in its cache.
 
-## 3. Add a config for one project
+## 3. Add a config file for one project
 
-Say your backend lives in `backend/`. Create `backend/.tree-commit-config.yaml`:
+In this example, your backend is in `backend/`. Create a `backend/.tree-commit-config.yaml` file with this content:
 
 ```yaml
 repos:
@@ -60,16 +62,18 @@ repos:
         pass_filenames: false
 ```
 
-What this says:
+The config file has these parts:
 
-- `repo: local`: the hooks are commands defined right here.
-- `entry`: the command to run. tree-commit adds the names of the files to check at the end, so `ruff check --fix app.py models.py`.
-- `types: [python]`: only check Python files.
-- `pass_filenames: false`: run the command once, without file names. pytest finds its own tests.
+- `repo: local`: the hooks are local hooks. Their commands are in this config file.
+- `entry`: the command to run. tree-commit adds the names of the files to check at the end of the command. For example: `ruff check --fix app.py models.py`.
+- `types: [python]`: check only Python files.
+- `pass_filenames: false`: run the command one time, without file names. pytest finds its own tests.
 
-Because this config is in `backend/`, these hooks only see files under `backend/`, and they run **inside** `backend/`. That is why `uv run pytest` finds `backend/pyproject.toml`.
+Because this config file is in `backend/`, its hooks get only the files below `backend/`. The hooks also run **inside** `backend/`. Thus, `uv run pytest` finds `backend/pyproject.toml`.
 
-## 4. See what will run
+## 4. Preview the hooks
+
+Stage your changes, then show the config files and the hooks:
 
 ```sh
 git add -A
@@ -77,34 +81,43 @@ tree-commit tree
 tree-commit run --dry-run
 ```
 
-`tree` shows the configs it found. `--dry-run` lists every hook that would run on your staged files, with the files each one gets, without running anything.
+`tree` shows the config files that tree-commit found. `--dry-run` lists each hook for your staged files, and the files that each hook gets. It does not run the hooks.
 
 ## 5. Run the hooks
+
+Run all hooks on all files:
 
 ```sh
 tree-commit run --all-files
 ```
 
-Every hook prints one line: `Passed`, `Failed` or `Skipped`. A failing hook also shows its output. A hook that **changes** a file (a formatter, for example) counts as failed too, so you can review the change before committing.
+Each hook prints one line: `Passed`, `Failed` or `Skipped`. If a hook fails, it also shows its output. If a hook **changes** a file (for example, a formatter), the result is also `Failed`. This lets you examine the change before you commit.
 
 ## 6. Install the git hook
+
+Run this command:
 
 ```sh
 tree-commit install
 ```
 
-From now on, `git commit` runs tree-commit on the files you staged. If anything fails, the commit is stopped. Fix the problem, or `git add` the changes a formatter made, and commit again.
+After this step, `git commit` runs tree-commit on the files that you staged. If a hook fails, the commit stops. Then do these steps:
 
-To skip a hook once:
+1. Fix the problem, or use `git add` to stage the changes that a formatter made.
+2. Commit again.
+
+To skip a hook one time, use the `SKIP` environment variable:
 
 ```sh
 SKIP=pytest git commit -m "WIP"
 ```
 
-To bypass all hooks once, use git's own `git commit --no-verify`.
+To skip all hooks one time, use `git commit --no-verify`. This is a standard git option.
 
 ## Next steps
 
-- Read [How it works](how-it-works.md) to learn how nested configs override each other.
-- Browse the [Recipes](recipes.md) for Go, frontend, CI and more.
-- Look at the [example monorepo](../example_repos/example_monorepo), which uses every feature.
+These pages give more information:
+
+- Read [How it works](how-it-works.md) to learn how nested config files override each other.
+- See the [Recipes](recipes.md) for Go, frontend, CI and other configurations.
+- Examine the [example monorepo](../example_repos/example_monorepo). It uses all features.

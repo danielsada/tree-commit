@@ -1,10 +1,10 @@
 # Recipes
 
-Copy-paste setups for common situations. The [example monorepo](../example_repos/example_monorepo) combines most of them.
+This page gives config files that you can copy for common situations. The [example monorepo](../example_repos/example_monorepo) combines most of them.
 
 ## Python with uv and ruff
 
-Shared settings at the root, so every Python project is linted the same way:
+Put the shared settings in the config file at the root. Then tree-commit lints all Python projects the same way:
 
 ```yaml
 # .tree-commit-config.yaml
@@ -24,7 +24,7 @@ repos:
         types_or: [python, pyi]
 ```
 
-Each uv project adds its tests. The hook runs inside the project, so `uv run` uses the project's lockfile:
+Each uv project adds a hook for its tests. The hook runs in the project directory, so `uv run` uses the lockfile of the project:
 
 ```yaml
 # services/billing/.tree-commit-config.yaml
@@ -39,7 +39,7 @@ repos:
         pass_filenames: false
 ```
 
-Prefer the official mirror? Use [ruff-pre-commit](https://github.com/astral-sh/ruff-pre-commit) instead; Python 3 must be on your `PATH`:
+You can use the official mirror, [ruff-pre-commit](https://github.com/astral-sh/ruff-pre-commit), instead. For this, Python 3 must be on your `PATH`:
 
 ```yaml
 repos:
@@ -53,7 +53,7 @@ repos:
 
 ## Stricter rules for one directory
 
-Redefine the same `id` in a nested config. For files below that directory, it replaces the parent's hook:
+Define a hook with the same `id` in a nested config file. For the files in that directory and its subdirectories, this hook replaces the hook from the parent config file:
 
 ```yaml
 # src/core/.tree-commit-config.yaml
@@ -69,7 +69,7 @@ repos:
 
 ## Vendored or generated code
 
-Turn off the hooks that should not touch it:
+Disable the hooks that must not run on this code:
 
 ```yaml
 # third_party/.tree-commit-config.yaml
@@ -82,7 +82,7 @@ repos:
         disable: true
 ```
 
-Or skip folders for a single hook with `exclude_folders: [generated/]`.
+To skip directories for only one hook, use `exclude_folders: [generated/]`.
 
 ## Go module
 
@@ -114,7 +114,7 @@ repos:
 
 ## JavaScript / TypeScript project
 
-Use the project's own tools with `npx --no-install` (run `npm install` first):
+Run `npm install` first. Then use the tools of the project with `npx --no-install`:
 
 ```yaml
 # frontend/.tree-commit-config.yaml
@@ -143,7 +143,7 @@ repos:
 
 ## Shell scripts
 
-shellcheck and shfmt are available as Python wheels, so `uvx` can install them on demand:
+shellcheck and shfmt are available as Python wheels. Thus, `uvx` can install them when they are necessary:
 
 ```yaml
 repos:
@@ -164,6 +164,8 @@ repos:
 
 ## Forbid patterns and files
 
+Use a `pygrep` hook to forbid a pattern and a `fail` hook to forbid files:
+
 ```yaml
 repos:
   - repo: local
@@ -183,6 +185,8 @@ repos:
 
 ## Slow checks on push only
 
+This hook runs only in the `pre-push` stage:
+
 ```yaml
 default_stages: [pre-commit]
 repos:
@@ -196,7 +200,7 @@ repos:
         stages: [pre-push]
 ```
 
-Run them before pushing, or in CI:
+To run these hooks before you push, or in CI, use this command:
 
 ```sh
 tree-commit run --hook-stage pre-push --all-files
@@ -204,7 +208,7 @@ tree-commit run --hook-stage pre-push --all-files
 
 ## Continuous integration
 
-Run every hook on every file:
+This workflow runs all hooks on all files:
 
 ```yaml
 # .github/workflows/checks.yml
@@ -223,16 +227,16 @@ jobs:
       - run: tree-commit run --all-files --color always
 ```
 
-Or only check what the pull request changed:
+To check only the files that the pull request changed, use these commands:
 
 ```sh
 git fetch origin main
 tree-commit run --files "$(git diff --name-only --diff-filter=d origin/main... | paste -sd, -)"
 ```
 
-## Try a config before committing it
+## Try a config file before you commit it
 
-Configs that are not committed yet are picked up too. Preview what they would do:
+tree-commit also finds config files that are not committed yet. To see what they do, use these commands:
 
 ```sh
 tree-commit run --all-files --dry-run

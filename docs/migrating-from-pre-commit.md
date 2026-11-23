@@ -1,27 +1,31 @@
 # Migrating from pre-commit
 
-tree-commit reads pre-commit configs and runs pre-commit hooks, so most setups move over without changes.
+tree-commit reads pre-commit config files and runs pre-commit hooks. Because of this, most repositories migrate without changes.
 
-## Step 1: keep your config
+## Step 1: Keep your config file
 
-Leave `.pre-commit-config.yaml` where it is. tree-commit uses it in any directory that has no `.tree-commit-config.yaml`. Check what it would do:
+Keep `.pre-commit-config.yaml` in its current location. tree-commit uses it in each directory that has no `.tree-commit-config.yaml`.
+
+To see what tree-commit does, do a dry run first. Then run the hooks on all files:
 
 ```sh
 tree-commit run --all-files --dry-run
 tree-commit run --all-files
 ```
 
-## Step 2: switch the git hook
+## Step 2: Replace the git hook
+
+Run this command:
 
 ```sh
 tree-commit install
 ```
 
-This replaces the hook that `pre-commit install` created. That hook is kept, but it is not run (tree-commit already runs your config). `tree-commit uninstall` puts it back.
+This command replaces the hook that `pre-commit install` created. tree-commit keeps the old hook, but does not run it, because tree-commit already runs your config file. `tree-commit uninstall` restores the old hook.
 
-## Step 3 (optional): split the config
+## Step 3 (optional): Split the config file
 
-The reason to switch is to move project-specific hooks next to the projects. Take a root config like this:
+The reason to change to tree-commit is to move project-specific hooks into the directories of the projects. For example, start with this root config file:
 
 ```yaml
 # .pre-commit-config.yaml
@@ -41,7 +45,7 @@ repos:
         pass_filenames: false
 ```
 
-It becomes `services/billing/.tree-commit-config.yaml`, without the `files:` prefixes or the `cd`:
+Move these hooks to `services/billing/.tree-commit-config.yaml`. Remove the `files:` prefixes and the `cd`:
 
 ```yaml
 repos:
@@ -58,30 +62,34 @@ repos:
         pass_filenames: false
 ```
 
-Things to keep in mind when moving hooks into a subdirectory:
+When you move hooks into a subdirectory, remember these rules:
 
 - **Patterns become relative** to the new directory: `^services/billing/src/` becomes `^src/`.
-- **Hooks run from the new directory**, and receive file names relative to it.
-- **Same `id` means override**: if the root config and the subdirectory both define `ruff-check`, only the subdirectory's runs on its files. Give hooks different ids if you want both to run.
+- **Hooks run from the new directory**, and get file names relative to it.
+- **The same `id` means override**: if the root config file and the subdirectory both define `ruff-check`, only the hook in the subdirectory runs on its files. If you want both hooks to run, give them different ids.
 
-## What is different
+## Differences from pre-commit
+
+This table shows the differences between pre-commit and tree-commit:
 
 | | pre-commit | tree-commit |
 | --- | --- | --- |
-| Config files | One, at the root | One per directory |
-| Hooks run from | Repository root | The config's directory |
-| Same hook id in two configs | n/a | The closest config wins |
+| Config files | One, at the root | One for each directory |
+| Hooks run from | Repository root | The directory of the config file |
+| Same hook id in two config files | n/a | The closest config file wins |
 | Unstaged changes | Stashed while hooks run | **Not stashed**: hooks see your working copy |
-| Remote hook languages | All | `system`, `script`, `python`, `pygrep`, `fail`; others are skipped |
+| Remote hook languages | All | `system`, `script`, `python`, `pygrep`, `fail`; other languages are skipped |
 | Hook types installed | `pre-commit`, `pre-push`, `commit-msg`, … | `pre-commit` only; run other stages with `--hook-stage` |
 | `meta` hooks, `minimum_pre_commit_version`, `ci:` | Supported | Ignored |
-| Parallelism | Within a hook | Also across hooks that touch different files |
+| Parallelism | In a hook | Also across hooks that touch different files |
 
-The most important difference is **unstaged changes**. If you staged only part of a file, hooks check the whole file as it is on disk, and formatters may change lines you did not stage. Stage whole files, or stash first with `git stash --keep-index`.
+The most important difference is **unstaged changes**. If you stage only part of a file, hooks check the full file as it is on disk. Formatters can also change lines that you did not stage.
 
-## Hooks in languages tree-commit can't install
+To prevent this, stage full files, or stash your unstaged changes first with `git stash --keep-index`.
 
-Remote hooks written in Node, Go, Rust and other languages are reported as `Skipped`. Replace them with a local hook that runs the tool, for example through `npx` or `uvx`:
+## Hooks in languages that tree-commit cannot install
+
+tree-commit reports remote hooks in Node, Go, Rust, and other languages as `Skipped`. Replace each of these hooks with a local hook that runs the tool, for example through `npx` or `uvx`:
 
 ```yaml
 # Before
