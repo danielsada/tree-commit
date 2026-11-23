@@ -126,3 +126,7 @@ The [example monorepo](example_repos/example_monorepo) shows all features in a r
 ## Contributing
 
 See [Development](docs/development.md).
+
+## License
+
+tree-commit is available under the MIT license. See [LICENSE](LICENSE).
