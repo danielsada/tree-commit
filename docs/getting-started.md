@@ -4,16 +4,22 @@ This walkthrough shows how to install and configure tree-commit in a small repos
 
 ## 1. Install tree-commit
 
-You need git and [Go](https://go.dev/dl/) 1.23 or newer.
+You need git. Install tree-commit in one of these ways:
 
-Run these commands to install tree-commit and make sure that it works:
+- **Download a binary.** Get the archive for your system from the [releases page](https://github.com/danielsada/tree-commit/releases): Linux, macOS and Windows, for amd64 and arm64. Extract it and put `tree-commit` in a directory on your `PATH`. `checksums.txt` has the SHA-256 checksums of the archives.
+- **Build it with Go** 1.23 or newer:
+
+  ```sh
+  go install github.com/danielsada/tree-commit@latest
+  ```
+
+Run this command to make sure that tree-commit works:
 
 ```sh
-go install github.com/danielsada/tree-commit@latest
 tree-commit --version
 ```
 
-If your shell cannot find `tree-commit`, add the Go bin directory to your `PATH`. This directory is `$(go env GOPATH)/bin`, usually `~/go/bin`.
+If you used `go install` and your shell cannot find `tree-commit`, add the Go bin directory to your `PATH`. This directory is `$(go env GOPATH)/bin`, usually `~/go/bin`.
 
 The examples below also use [uv](https://docs.astral.sh/uv/getting-started/installation/) to run Python tools. With uv, you do not have to install these tools globally. Remote hooks that are written in Python need Python 3.
 

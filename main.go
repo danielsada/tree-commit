@@ -6,13 +6,26 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strconv"
 
 	"github.com/spf13/cobra"
 )
 
-// version is set at build time with -ldflags "-X main.version=...".
+// version is set at build time with -ldflags "-X main.version=...". Release
+// builds set it; `go install ...@version` builds report the module version.
 var version = "dev"
+
+// buildVersion returns the version of this binary.
+func buildVersion() string {
+	if version != "dev" {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+	return version
+}
 
 var rootCmd = &cobra.Command{
 	Use:   "tree-commit",
@@ -22,7 +35,7 @@ var rootCmd = &cobra.Command{
 Drop a .tree-commit-config.yaml (same format as .pre-commit-config.yaml) in any
 directory of a repository. Its hooks only run on changed files below that
 directory, so every team in a monorepo can own its own checks.`,
-	Version:       version,
+	Version:       buildVersion(),
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }
