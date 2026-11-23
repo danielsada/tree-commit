@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -65,10 +66,9 @@ func init() {
 }
 
 // runHooks runs the hooks and returns the process exit code (0 when all hooks pass).
-func runHooks(ctx context.Context, opts *runOptions, out io.Writer) (int, error) {
+func runHooks(ctx context.Context, opts *runOptions, out io.Writer) (code int, err error) {
 	dir := opts.dir
 	if dir == "" {
-		var err error
 		if dir, err = os.Getwd(); err != nil {
 			return 0, err
 		}
@@ -77,6 +77,16 @@ func runHooks(ctx context.Context, opts *runOptions, out io.Writer) (int, error)
 	if err != nil {
 		return 0, err
 	}
+
+	s, err := stashForRun(root, opts, out)
+	if err != nil {
+		return 0, err
+	}
+	defer func() {
+		if restoreErr := s.restore(); restoreErr != nil {
+			err = errors.Join(err, restoreErr)
+		}
+	}()
 
 	files, err := selectFiles(root, dir, opts)
 	if err != nil {

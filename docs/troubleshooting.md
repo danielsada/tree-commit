@@ -75,15 +75,17 @@ The repository does not define that hook at that version. Read the `.pre-commit-
 
 tree-commit stops when a config file is not valid, so that a typo never silently disables your checks. The message gives the file and the problem, for example `repos[0] (https://…): missing required field 'rev'`.
 
-## A hook changes lines that you did not stage
+## `Unstaged files detected`
 
-tree-commit does not stash unstaged changes, so hooks see the files as they are on disk. To prevent this problem, stage full files, or run these commands:
+This is not an error. When you commit only part of your changes, tree-commit removes the unstaged changes while the hooks run, so the hooks check only what you commit. After the hooks, tree-commit restores your changes.
 
-```sh
-git stash --keep-index
-git commit
-git stash pop
-```
+tree-commit saves the unstaged changes as a patch file in its cache, in `patches/`. It deletes the patch after it restores your changes.
+
+## `Stashed changes conflicted with hook auto-fixes`
+
+A hook (for example a formatter) changed a part of a file that also has unstaged changes. tree-commit cannot keep both. It keeps your unstaged changes and removes the changes of the hook. The hook still fails. To fix this, stage the full file, and commit again.
+
+If tree-commit cannot restore your changes, the error message shows the patch file. To restore the changes yourself, run `git apply <patch file>`.
 
 ## Windows
 

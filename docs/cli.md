@@ -47,6 +47,14 @@ These are the arguments and flags of `run`:
 
 You can run `tree-commit run` from any directory in the repository.
 
+When `tree-commit run` checks staged files, the hooks see only the staged content, as in pre-commit:
+
+1. tree-commit saves the unstaged changes as a patch, and removes them from the work tree.
+1. The hooks run.
+1. tree-commit applies the patch again. If the patch conflicts with changes that a hook made, tree-commit removes the changes of the hook and keeps your changes.
+
+With `--all-files` or `--files`, the hooks see the files as they are on disk, and tree-commit does not remove unstaged changes.
+
 ### Output
 
 This is an example of the output for a hook that failed:
