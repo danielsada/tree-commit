@@ -222,7 +222,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: stable
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.4.0
       - run: go install github.com/danielsada/tree-commit@latest
       - run: tree-commit run --all-files --color always
 ```

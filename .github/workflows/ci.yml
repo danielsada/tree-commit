@@ -38,7 +38,7 @@ jobs:
         with:
           go-version-file: go.mod
       # The example monorepo end-to-end test runs its hooks through uv.
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.4.0
       # Tests of remote Node.js hooks are skipped without Node.js.
       - uses: actions/setup-node@v7
         with:
