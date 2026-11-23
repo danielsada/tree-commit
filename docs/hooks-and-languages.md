@@ -23,9 +23,11 @@ With `pass_filenames: false`, the command runs one time without file names. tree
 | `system` | ✅ Runs `entry` as found on your `PATH`. | ✅ |
 | `script` | ✅ `entry` is a script path, relative to the config file directory. | ✅ Relative to the hook repository. |
 | `python` | ✅ Runs from `PATH`. With `additional_dependencies`, runs in a virtual environment with those packages. | ✅ tree-commit installs the repository in a cached virtual environment. |
+| `node` | ✅ Same as `system`. With `additional_dependencies`, runs with those npm packages installed. | ✅ tree-commit installs the repository with npm. Node.js and npm must be on your `PATH`. |
+| `golang` | ✅ Same as `system`. With `additional_dependencies` (`module@version`), runs with those commands installed. | ✅ tree-commit builds the repository with `go install`. Go must be on your `PATH`. |
 | `pygrep` | ✅ Built in, see below. | ✅ |
 | `fail` | ✅ Built in, see below. | ✅ |
-| all other values (`node`, `golang`, `rust`, `docker`, …) | ✅ Same as `system`: the tool must be on your `PATH`. | ⏭️ Reported as `Skipped`. |
+| all other values (`rust`, `docker`, `ruby`, …) | ✅ Same as `system`: the tool must be on your `PATH`. | ⏭️ Reported as `Skipped`. |
 
 With `uvx` and `npx`, most tools are available without a global installation. They work with `language: system`:
 
@@ -95,7 +97,7 @@ These rules apply to remote hooks:
 | --- | --- |
 | Cache directory | `$TREE_COMMIT_HOME`, or `tree-commit` in your user cache directory: `~/.cache` on Linux, `~/Library/Caches` on macOS, `%LocalAppData%` on Windows |
 | Cloned repositories | `repos/` |
-| Python environments | `envs/` |
+| Python, Node.js and Go environments | `envs/` |
 
 tree-commit caches repositories by URL and `rev`. If `rev` is a branch name, tree-commit does not see when the branch moves. Thus, use tags or commit hashes when possible. Run `tree-commit clean` to delete the cache. tree-commit builds the cache again on the next run.
 

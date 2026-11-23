@@ -78,7 +78,7 @@ This table shows the differences between pre-commit and tree-commit:
 | Hooks run from | Repository root | The directory of the config file |
 | Same hook id in two config files | n/a | The closest config file wins |
 | Unstaged changes | Stashed while hooks run | **Not stashed**: hooks see your working copy |
-| Remote hook languages | All | `system`, `script`, `python`, `pygrep`, `fail`; other languages are skipped |
+| Remote hook languages | All | `system`, `script`, `python`, `node`, `golang`, `pygrep`, `fail`; other languages are skipped |
 | Hook types installed | `pre-commit`, `pre-push`, `commit-msg`, … | `pre-commit` only; run other stages with `--hook-stage` |
 | `meta` hooks, `minimum_pre_commit_version`, `ci:` | Supported | Ignored |
 | prek's `repo: builtin` | Not supported | Runs the hooks from pre-commit-hooks v6.0.0 |
@@ -90,20 +90,18 @@ To prevent this, stage full files, or stash your unstaged changes first with `gi
 
 ## Hooks in languages that tree-commit cannot install
 
-tree-commit reports remote hooks in Node, Go, Rust, and other languages as `Skipped`. Replace each of these hooks with a local hook that runs the tool, for example through `npx` or `uvx`:
+Remote hooks in Node.js and Go run when Node.js and npm, or Go, are on your `PATH`. tree-commit reports remote hooks in other languages (for example Rust, Docker and Ruby) as `Skipped`. Replace each of these hooks with a hook that runs the tool from your `PATH`. Many hook repositories have such a hook:
 
 ```yaml
-# Before
-- repo: https://github.com/pre-commit/mirrors-prettier
-  rev: v3.1.0
+# Before: a docker_image hook, which tree-commit skips
+- repo: https://github.com/hadolint/hadolint
+  rev: v2.15.1
   hooks:
-    - id: prettier
+    - id: hadolint-docker
 
-# After
-- repo: local
+# After: the same repository's hook that runs hadolint from your PATH
+- repo: https://github.com/hadolint/hadolint
+  rev: v2.15.1
   hooks:
-    - id: prettier
-      name: prettier
-      entry: npx --yes prettier@3.1.0 --write --ignore-unknown
-      language: system
+    - id: hadolint
 ```

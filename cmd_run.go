@@ -218,7 +218,14 @@ func useColor(mode string, out io.Writer) bool {
 	return err == nil && info.Mode()&os.ModeCharDevice != 0
 }
 
-func printPlan(out io.Writer, plan []*hookRun, fileCount int) {
+// printPlan lists the hooks that would run. Hooks without files are left out.
+func printPlan(out io.Writer, all []*hookRun, fileCount int) {
+	plan := make([]*hookRun, 0, len(all))
+	for _, r := range all {
+		if !r.noFiles {
+			plan = append(plan, r)
+		}
+	}
 	fmt.Fprintf(out, "%d hook(s) would run on %d file(s):\n", len(plan), fileCount)
 	deps := hookDependencies(plan)
 	for i, r := range plan {

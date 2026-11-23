@@ -40,8 +40,9 @@ type hookDef struct {
 
 // hookRun is a hook that will be executed, with the files it applies to.
 type hookRun struct {
-	def   *hookDef
-	files []string // paths relative to the repo root
+	def     *hookDef
+	files   []string // paths relative to the repo root
+	noFiles bool     // the hook is in scope but no file matches: reported as skipped
 }
 
 // manifestSource provides hook manifests for remote repositories.
@@ -66,7 +67,8 @@ type resolver struct {
 // supportedRemoteLanguages are the languages tree-commit can install and run for
 // hooks that come from a remote repository manifest.
 var supportedRemoteLanguages = map[string]bool{
-	langSystem: true, langScript: true, langPython: true, langFail: true, langPygrep: true,
+	langSystem: true, langScript: true, langPython: true, langNode: true, langGolang: true,
+	langFail: true, langPygrep: true,
 }
 
 // scopesFromTree converts a discovered config tree into scopes.
@@ -122,7 +124,7 @@ func buildPlan(root string, scopes []*scope, files []string, source manifestSour
 		}
 	}
 
-	addAlwaysRunHooks(inScope, runs)
+	addHooksWithoutFiles(inScope, runs)
 
 	plan := make([]*hookRun, 0, len(runs))
 	for _, run := range runs {
@@ -133,12 +135,14 @@ func buildPlan(root string, scopes []*scope, files []string, source manifestSour
 	return plan
 }
 
-// addAlwaysRunHooks adds always_run hooks of in-scope configs, even without matching files.
-func addAlwaysRunHooks(inScope map[*scope]bool, runs map[*hookDef]*hookRun) {
+// addHooksWithoutFiles adds the active hooks of in-scope configs that matched no
+// file. always_run hooks run anyway; the others are reported as skipped, like
+// pre-commit's "(no files to check)".
+func addHooksWithoutFiles(inScope map[*scope]bool, runs map[*hookDef]*hookRun) {
 	for sc := range inScope {
 		for _, d := range sc.defs {
-			if d.won && d.hook.AlwaysRun && runs[d] == nil {
-				runs[d] = &hookRun{def: d}
+			if d.won && runs[d] == nil {
+				runs[d] = &hookRun{def: d, noFiles: !d.hook.AlwaysRun}
 			}
 		}
 	}

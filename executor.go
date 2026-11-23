@@ -38,7 +38,7 @@ type hookResult struct {
 
 // envProvider builds language environments for hooks.
 type envProvider interface {
-	pythonEnv(repoDir string, deps []string) (string, error)
+	languageEnv(language, repoDir string, deps []string) (string, error)
 }
 
 type executor struct {
@@ -101,6 +101,9 @@ type footprint struct {
 
 func footprintOf(r *hookRun) footprint {
 	fp := footprint{files: make(map[string]bool, len(r.files)), dir: r.def.scope.dir}
+	if r.noFiles {
+		return fp
+	}
 	for _, f := range r.files {
 		fp.files[f] = true
 	}
@@ -155,6 +158,9 @@ func hookDependencies(runs []*hookRun) [][]int {
 
 func (x *executor) execute(r *hookRun) *hookResult {
 	d := r.def
+	if r.noFiles {
+		return &hookResult{status: statusSkipped}
+	}
 	if d.err != nil {
 		return &hookResult{status: statusFailed, note: d.err.Error()}
 	}
@@ -284,18 +290,19 @@ func (x *executor) command(d *hookDef) (argv, env []string, err error) {
 			base = x.scopeDir(d)
 		}
 		argv[0] = filepath.Join(base, filepath.FromSlash(argv[0]))
-	case h.Language == langPython && (d.repoDir != "" || len(h.AdditionalDependencies) > 0):
+	case envKinds[h.Language] != "" && (d.repoDir != "" || len(h.AdditionalDependencies) > 0):
+		// Remote hooks, and local hooks with additional_dependencies, run in an
+		// environment. Other local hooks use the tools on PATH.
 		if x.envs == nil {
-			return nil, nil, errors.New("python environments are not available")
+			return nil, nil, fmt.Errorf("%s environments are not available", h.Language)
 		}
-		envDir, envErr := x.envs.pythonEnv(d.repoDir, h.AdditionalDependencies)
+		envDir, envErr := x.envs.languageEnv(h.Language, d.repoDir, h.AdditionalDependencies)
 		if envErr != nil {
 			return nil, nil, envErr
 		}
-		pathEnv = venvBinDir(envDir) + string(os.PathListSeparator) + pathEnv
+		pathEnv = envBinDir(h.Language, envDir) + string(os.PathListSeparator) + pathEnv
 		env = setEnv(env, "PATH", pathEnv)
-		env = setEnv(env, "VIRTUAL_ENV", envDir)
-		env = unsetEnv(env, "PYTHONHOME")
+		env = envVariables(h.Language, envDir, env)
 	}
 
 	exe, err := resolveExecutable(argv[0], x.scopeDir(d), pathEnv)
@@ -622,10 +629,14 @@ func (x *executor) report(r *hookRun, res *hookResult) {
 	default:
 		status, code = "Skipped", "30;43"
 	}
-	fmt.Fprintln(x.out, statusLine(hookLabel(r.def), status)+x.paint(status, code))
+	reason := ""
+	if r.noFiles {
+		reason = "(no files to check)"
+	}
+	fmt.Fprintln(x.out, statusLine(hookLabel(r.def), reason+status)+reason+x.paint(status, code))
 
 	details := res.status != statusPassed || x.verbose || r.def.hook.Verbose
-	if !details {
+	if !details || r.noFiles {
 		return
 	}
 	if res.status == statusSkipped {

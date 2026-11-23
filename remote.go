@@ -158,12 +158,39 @@ func cloneAtRev(repo, rev, dest string) error {
 	return nil
 }
 
+// envBuilder installs a hook repository (if any) and dependencies into envDir.
+type envBuilder func(envDir, repoDir string, deps []string) error
+
+// envKinds are the cache directory prefixes of the languages with environments.
+var envKinds = map[string]string{langPython: "py", langNode: "node", langGolang: "go"}
+
+// languageEnv returns an environment for language with the hook repository (if
+// any) and the additional dependencies installed.
+func (c *repoCache) languageEnv(language, repoDir string, deps []string) (string, error) {
+	switch language {
+	case langPython:
+		return c.pythonEnv(repoDir, deps)
+	case langNode:
+		return c.cachedEnv(language, repoDir, deps, buildNodeEnv)
+	case langGolang:
+		return c.cachedEnv(language, repoDir, deps, buildGoEnv)
+	default:
+		return "", fmt.Errorf("tree-commit cannot create %s environments", language)
+	}
+}
+
 // pythonEnv returns a virtualenv with the hook repository (if any) and the
 // additional dependencies installed.
 func (c *repoCache) pythonEnv(repoDir string, deps []string) (string, error) {
+	return c.cachedEnv(langPython, repoDir, deps, c.buildPythonEnv)
+}
+
+// cachedEnv builds an environment once per process and reuses ready
+// environments from the cache directory.
+func (c *repoCache) cachedEnv(language, repoDir string, deps []string, build envBuilder) (string, error) {
 	sorted := append([]string(nil), deps...)
 	sort.Strings(sorted)
-	key := shortHash(append([]string{repoDir}, sorted...)...)
+	key := envKinds[language] + "-" + shortHash(append([]string{repoDir}, sorted...)...)
 
 	c.mu.Lock()
 	e := c.envs[key]
@@ -174,13 +201,14 @@ func (c *repoCache) pythonEnv(repoDir string, deps []string) (string, error) {
 	c.mu.Unlock()
 
 	e.once.Do(func() {
-		e.dir = filepath.Join(c.dir, "envs", "py-"+key)
-		e.err = c.buildPythonEnv(e.dir, repoDir, sorted)
+		e.dir = filepath.Join(c.dir, "envs", key)
+		e.err = buildEnv(language, e.dir, func(envDir string) error { return build(envDir, repoDir, sorted) })
 	})
 	return e.dir, e.err
 }
 
-func (c *repoCache) buildPythonEnv(envDir, repoDir string, deps []string) error {
+// buildEnv builds envDir with build, unless another process already did.
+func buildEnv(language, envDir string, build func(envDir string) error) error {
 	if fileExists(filepath.Join(envDir, readyMarker)) {
 		return nil
 	}
@@ -191,30 +219,114 @@ func (c *repoCache) buildPythonEnv(envDir, repoDir string, deps []string) error 
 		if fileExists(filepath.Join(envDir, readyMarker)) {
 			return nil
 		}
-		uv := uvExecutable()
-		python, err := c.findPython()
-		if err != nil && uv == "" {
-			return err
-		}
 		if err := os.RemoveAll(envDir); err != nil {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, "[tree-commit] Creating python environment %s\n", filepath.Base(envDir))
-		if err := createVirtualenv(uv, python, envDir); err != nil {
+		fmt.Fprintf(os.Stderr, "[tree-commit] Creating %s environment %s\n", language, filepath.Base(envDir))
+		if err := build(envDir); err != nil {
+			_ = os.RemoveAll(envDir)
 			return err
-		}
-		if repoDir != "" || len(deps) > 0 {
-			packages := append([]string(nil), deps...)
-			if repoDir != "" {
-				packages = append([]string{repoDir}, packages...)
-			}
-			if err := installPackages(uv, envDir, packages); err != nil {
-				_ = os.RemoveAll(envDir)
-				return err
-			}
 		}
 		return os.WriteFile(filepath.Join(envDir, readyMarker), nil, 0o600)
 	})
+}
+
+func (c *repoCache) buildPythonEnv(envDir, repoDir string, deps []string) error {
+	uv := uvExecutable()
+	python, err := c.findPython()
+	if err != nil && uv == "" {
+		return err
+	}
+	if err := createVirtualenv(uv, python, envDir); err != nil {
+		return err
+	}
+	if repoDir == "" && len(deps) == 0 {
+		return nil
+	}
+	packages := append([]string(nil), deps...)
+	if repoDir != "" {
+		packages = append([]string{repoDir}, packages...)
+	}
+	return installPackages(uv, envDir, packages)
+}
+
+// buildNodeEnv installs the hook repository and dependencies as global npm
+// packages under envDir, like pre-commit: the repository is built with
+// `npm install`, packed with `npm pack` and installed from the tarball.
+func buildNodeEnv(envDir, repoDir string, deps []string) error {
+	npm, lookErr := exec.LookPath("npm")
+	if lookErr != nil {
+		return errors.New("node hooks need node and npm, which were not found on PATH")
+	}
+	if err := os.MkdirAll(envDir, 0o750); err != nil {
+		return err
+	}
+	packages := append([]string(nil), deps...)
+	if repoDir != "" {
+		tarball, packErr := npmPack(npm, repoDir, envDir)
+		if packErr != nil {
+			return packErr
+		}
+		packages = append([]string{tarball}, packages...)
+	}
+	if len(packages) == 0 {
+		return nil
+	}
+	args := append([]string{"install", "--global", "--prefix", envDir,
+		"--no-audit", "--no-fund", "--no-progress", "--loglevel=error"}, packages...)
+	_, err := runSetupIn("", nil, "npm install", npm, args...)
+	return err
+}
+
+// npmPack builds the package in repoDir and packs it into destDir. The lock
+// keeps concurrent environments for the same repository from sharing node_modules.
+func npmPack(npm, repoDir, destDir string) (string, error) {
+	var tarball string
+	err := withFileLock(repoDir+".npm-lock", func() error {
+		defer func() { _ = os.RemoveAll(filepath.Join(repoDir, "node_modules")) }()
+		if _, err := runSetupIn(repoDir, nil, "npm install", npm,
+			"install", "--include=dev", "--include=prod", "--no-save",
+			"--no-audit", "--no-fund", "--no-progress", "--loglevel=error"); err != nil {
+			return err
+		}
+		out, err := runSetupIn(repoDir, nil, "npm pack", npm,
+			"pack", "--silent", "--pack-destination", destDir)
+		if err != nil {
+			return err
+		}
+		lines := strings.Fields(out)
+		if len(lines) == 0 {
+			return errors.New("npm pack did not report a package file")
+		}
+		tarball = filepath.Join(destDir, lines[len(lines)-1])
+		return nil
+	})
+	return tarball, err
+}
+
+// buildGoEnv installs the commands of the hook repository and the
+// dependencies (module@version) into envDir/bin with `go install`.
+func buildGoEnv(envDir, repoDir string, deps []string) error {
+	goExe, err := exec.LookPath("go")
+	if err != nil {
+		return errors.New("golang hooks need go, which was not found on PATH")
+	}
+	bin := filepath.Join(envDir, "bin")
+	if err := os.MkdirAll(bin, 0o750); err != nil {
+		return err
+	}
+	env := setEnv(noGitEnv(), "GOBIN", bin)
+	if repoDir != "" {
+		if _, err := runSetupIn(repoDir, env, "go install", goExe, "install", "./..."); err != nil {
+			return err
+		}
+	}
+	for _, dep := range deps {
+		if _, err := runSetupIn(envDir, env, "go install", goExe, "install", dep); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // uvExecutable returns the uv executable used to build Python environments, or
@@ -238,12 +350,26 @@ func uvExecutable() string {
 
 // runSetup runs an environment setup command and reports its output on failure.
 func runSetup(what, name string, args ...string) error {
+	_, err := runSetupIn("", nil, what, name, args...)
+	return err
+}
+
+// runSetupIn runs a setup command in dir (or the current directory) with env
+// (or the environment without git's hook variables) and returns its stdout.
+func runSetupIn(dir string, env []string, what, name string, args ...string) (string, error) {
 	cmd := exec.CommandContext(context.Background(), name, args...)
-	cmd.Env = noGitEnv()
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("%s failed: %w\n%s", what, err, out)
+	cmd.Dir = dir
+	cmd.Env = env
+	if env == nil {
+		cmd.Env = noGitEnv()
 	}
-	return nil
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("%s failed: %w\n%s%s", what, err, stdout.String(), stderr.String())
+	}
+	return stdout.String(), nil
 }
 
 // createVirtualenv creates a virtual environment with uv when available
@@ -314,6 +440,32 @@ func venvBinDir(envDir string) string {
 		return filepath.Join(envDir, "Scripts")
 	}
 	return filepath.Join(envDir, "bin")
+}
+
+// envBinDir returns the directory with the executables of an environment.
+func envBinDir(language, envDir string) string {
+	switch {
+	case language == langPython:
+		return venvBinDir(envDir)
+	case language == langNode && runtime.GOOS == windows:
+		return envDir
+	default:
+		return filepath.Join(envDir, "bin")
+	}
+}
+
+// envVariables sets the variables that activate an environment.
+func envVariables(language, envDir string, env []string) []string {
+	switch language {
+	case langPython:
+		env = setEnv(env, "VIRTUAL_ENV", envDir)
+		return unsetEnv(env, "PYTHONHOME")
+	case langNode:
+		env = setEnv(env, "NODE_VIRTUAL_ENV", envDir)
+		return setEnv(env, "NPM_CONFIG_PREFIX", envDir)
+	default:
+		return env
+	}
 }
 
 func venvPython(envDir string) string {

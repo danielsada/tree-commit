@@ -119,10 +119,10 @@ func TestRunRemoteRepository(t *testing.T) {
   entry: %q
   language: system
   files: \.txt$
-- id: node-hook
-  name: Node hook
+- id: docker-hook
+  name: Docker hook
   entry: eslint
-  language: node
+  language: docker
 `, helperEntry(t, "@log="+logPath, "@name=manifest")),
 	})
 	runGit(t, hooksRepo, "add", ".")
@@ -136,7 +136,7 @@ func TestRunRemoteRepository(t *testing.T) {
     hooks:
       - id: remote-hook
         args: ["@name=overridden"]
-      - id: node-hook
+      - id: docker-hook
 `, filepath.ToSlash(hooksRepo)),
 		"sub/a.txt": "a\n",
 		"sub/b.md":  "b\n",
@@ -150,8 +150,8 @@ func TestRunRemoteRepository(t *testing.T) {
 	}
 	// The user's args are merged on top of the manifest; files come from the manifest.
 	assertLines(t, readLog(t, logPath), []string{"overridden|sub|a.txt"})
-	if !strings.Contains(out, "Skipped") || !strings.Contains(out, `language "node" is not supported yet`) {
-		t.Errorf("expected node hook to be skipped:\n%s", out)
+	if !strings.Contains(out, "Skipped") || !strings.Contains(out, `language "docker" is not supported yet`) {
+		t.Errorf("expected docker hook to be skipped:\n%s", out)
 	}
 
 	// Second run uses the cache.

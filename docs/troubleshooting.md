@@ -55,6 +55,10 @@ On Debian and Ubuntu, Python cannot create virtual environments without the `pyt
 - Install [uv](https://docs.astral.sh/uv/) (recommended). tree-commit uses uv when it is on your `PATH`.
 - Install the `python3-venv` package, for example `sudo apt install python3-venv`.
 
+## `node hooks need node and npm` or `golang hooks need go`
+
+Remote hooks in Node.js (for example prettier or markdownlint) need Node.js and npm on your `PATH`. Remote hooks in Go (for example actionlint) need Go. Install the tool, or skip the hook with `SKIP`.
+
 ## `pip install failed` or a remote repository does not download
 
 If pip fails or a remote repository does not download, do these checks:

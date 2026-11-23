@@ -45,7 +45,7 @@ type fakeEnvs struct {
 	calls []string
 }
 
-func (f *fakeEnvs) pythonEnv(repoDir string, deps []string) (string, error) {
+func (f *fakeEnvs) languageEnv(_, repoDir string, deps []string) (string, error) {
 	f.calls = append(f.calls, repoDir+"|"+strings.Join(deps, ","))
 	return f.dir, f.err
 }

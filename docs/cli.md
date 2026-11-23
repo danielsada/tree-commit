@@ -64,7 +64,7 @@ The output has these parts:
 - One line for each hook, with its result: `Passed`, `Failed`, or `Skipped`.
 - Hooks from a nested config file show their directory, in this example `(backend/)`.
 - A hook that fails shows its id, its exit code, the error, and the output. `- files were modified by this hook` means that the hook changed files. Review these files and `git add` them.
-- A `Skipped` hook shows the reason, for example a language that tree-commit does not support.
+- A `Skipped` hook shows the reason, for example a language that tree-commit does not support. A hook that matches no file shows `(no files to check)Skipped`, as in pre-commit.
 
 ### Exit code
 

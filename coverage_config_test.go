@@ -218,6 +218,9 @@ func TestBuildPlanReportsBrokenHooksAndFiltersFiles(t *testing.T) {
 
 	got := map[string]string{}
 	for _, r := range plan {
+		if r.noFiles {
+			continue
+		}
 		got[r.def.id] = filepath.ToSlash(strings.Join(r.files, ","))
 		if r.def.id == "broken" && (r.def.err == nil || !strings.Contains(r.def.err.Error(), "invalid 'files' pattern")) {
 			t.Errorf("broken hook should carry its error, got %v", r.def.err)

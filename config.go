@@ -26,6 +26,8 @@ const (
 	langSystem = "system"
 	langScript = "script"
 	langPython = "python"
+	langNode   = "node"
+	langGolang = "golang"
 	langFail   = "fail"
 	langPygrep = "pygrep"
 

@@ -236,9 +236,19 @@ func TestRunHooksNothingToRun(t *testing.T) {
 	})
 	runGit(t, dir, "add", ".")
 
+	// Like pre-commit, hooks in scope that match no file are listed as skipped.
+	if code, out := runInRepo(t, dir, &runOptions{}); code != 0 || !strings.Contains(out, "py...") ||
+		!strings.HasSuffix(strings.TrimSpace(out), "(no files to check)Skipped") {
+		t.Errorf("expected the hook to be skipped, got %d\n%s", code, out)
+	}
+	if _, out := runInRepo(t, dir, &runOptions{dryRun: true}); !strings.Contains(out, "0 hook(s) would run") {
+		t.Errorf("dry run should not list hooks without files:\n%s", out)
+	}
+	t.Setenv("SKIP", "py")
 	if code, out := runInRepo(t, dir, &runOptions{}); code != 0 || !strings.Contains(out, "No hooks apply to the 2 selected file(s).") {
 		t.Errorf("expected nothing to run, got %d\n%s", code, out)
 	}
+	t.Setenv("SKIP", "")
 	if code, out := runInRepo(t, dir, &runOptions{hookID: "nope"}); code != 1 || !strings.Contains(out, `No hook with id "nope" applies to the selected files.`) {
 		t.Errorf("expected unknown hook id to fail, got %d\n%s", code, out)
 	}
