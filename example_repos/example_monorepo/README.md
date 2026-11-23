@@ -16,6 +16,7 @@ This table gives each path and what its config file shows:
 | `python_lib/src/calc/utils/helpers/` | Overrides `ruff-format` with a 79 column limit |
 | `services/api/` | Pins ruff through the remote `astral-sh/ruff-pre-commit` hooks |
 | `legacy/` | Vendored code: `disable: true` disables ruff and codespell |
+| `.grep-baseline.json` | The baseline of the `todo-needs-ticket` grep hook. It accepts the old TODO in `legacy/`, but new TODOs need a ticket number |
 | `infra/k8s/` | Overrides `check-yaml` to allow multi-document manifests |
 | `scripts/` | shellcheck and shfmt, installed on demand with `uvx` |
 | `docs/` | Markdown linting with pymarkdown through `uvx` |

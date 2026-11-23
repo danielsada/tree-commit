@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "hooks": {
+    "todo-needs-ticket": {
+      "mode": "lines",
+      "files": {
+        "legacy/billing_v1/invoice.py": {
+          "lines": {
+            "# TODO: support refunds": 1
+          }
+        }
+      }
+    }
+  }
+}

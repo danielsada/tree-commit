@@ -1,1 +1,3 @@
-tree-commit
+# Binaries written by go build in the repository root.
+/tree-commit
+/tree-commit.exe

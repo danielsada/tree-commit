@@ -164,7 +164,7 @@ repos:
 
 ## Forbid patterns and files
 
-Use a `pygrep` hook to forbid a pattern and a `fail` hook to forbid files:
+Use a `grep` hook to forbid a pattern and a `fail` hook to forbid files:
 
 ```yaml
 repos:
@@ -173,7 +173,7 @@ repos:
       - id: no-debugger
         name: no breakpoint()
         entry: '\bbreakpoint\(\)'
-        language: pygrep
+        language: grep
         types: [python]
 
       - id: no-env-files
@@ -181,6 +181,30 @@ repos:
         entry: Do not commit .env files, use .env.example
         language: fail
         files: (^|/)\.env$
+```
+
+## Add a rule to existing code
+
+A new rule can have many violations in old code. Use a baseline: tree-commit accepts the old violations, and new violations fail. The baseline gets smaller when you fix violations.
+
+```yaml
+repos:
+  - repo: local
+    hooks:
+      - id: no-print
+        name: no print() in library code
+        entry: '^\s*print\('
+        language: grep
+        types: [python]
+        baseline: .grep-baseline.json
+```
+
+Record the current violations, and commit the baseline file:
+
+```sh
+tree-commit baseline no-print
+git add .tree-commit-config.yaml .grep-baseline.json
+git commit -m "Forbid print() in new code"
 ```
 
 ## Slow checks on push only

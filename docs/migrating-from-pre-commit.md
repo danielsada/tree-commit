@@ -78,7 +78,7 @@ This table shows the differences between pre-commit and tree-commit:
 | Hooks run from | Repository root | The directory of the config file |
 | Same hook id in two config files | n/a | The closest config file wins |
 | Unstaged changes | Stashed while hooks run | **Not stashed**: hooks see your working copy |
-| Remote hook languages | All | `system`, `script`, `python`, `node`, `golang`, `pygrep`, `fail`; other languages are skipped |
+| Remote hook languages | All | `system`, `script`, `python`, `node`, `golang`, `pygrep`, `fail`; other languages are skipped. tree-commit also has `grep`, with baselines |
 | Hook types installed | `pre-commit`, `pre-push`, `commit-msg`, … | `pre-commit` only; run other stages with `--hook-stage` |
 | `meta` hooks, `minimum_pre_commit_version`, `ci:` | Supported | Ignored |
 | prek's `repo: builtin` | Not supported | Runs the hooks from pre-commit-hooks v6.0.0 |

@@ -100,6 +100,7 @@ tree-commit run ruff-check      # run one hook only
 tree-commit run --dry-run       # list the hooks to run, but do not run them
 tree-commit tree                # show where your config files are
 SKIP=pytest git commit          # skip a hook one time
+tree-commit baseline            # accept the current violations of grep hooks
 tree-commit uninstall           # remove the git hook
 ```
 

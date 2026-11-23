@@ -13,6 +13,7 @@ tree-commit has these commands:
 | [`uninstall`](#install-and-uninstall) | Remove the tree-commit hook. |
 | [`tree`](#tree) | Show the config files that tree-commit found. |
 | [`clean`](#clean) | Delete the cached hook repositories and environments. |
+| [`baseline`](#baseline) | Record the current violations of `grep` hooks in their baseline files. |
 | `completion` | Print a shell completion script (`tree-commit completion --help`). |
 
 These are the global flags:
@@ -104,6 +105,16 @@ This command prints the config files in the repository (or in `dir`):
     ├── 📁 backend/ (📄 .tree-commit-config.yaml)
     └── 📁 frontend/ (📄 .tree-commit-config.yaml)
 ```
+
+## baseline
+
+```sh
+tree-commit baseline [hook-id...]
+```
+
+Runs the `grep` and `pygrep` hooks that have a `baseline` on all files that git tracks. Then it replaces their baseline files with the violations that it found. Without a hook id, it records all hooks with a baseline.
+
+Use this command when you add a rule to existing code, or to accept the current violations again. For more information, see [Baselines](hooks-and-languages.md#baselines-adopt-a-rule-step-by-step).
 
 ## clean
 

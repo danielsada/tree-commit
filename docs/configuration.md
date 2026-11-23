@@ -79,6 +79,8 @@ These are the hook options:
 | `include_folders` | everything | tree-commit only. Check only the files in these directories. |
 | `exclude_folders` | nothing | tree-commit only. Skip the files in these directories, at all depths. |
 | `disable` | `false` | tree-commit only. Disable a hook that comes from a parent config file. |
+| `baseline` | | tree-commit only. For `grep` and `pygrep` hooks: a baseline file, relative to the config file. See [Baselines](hooks-and-languages.md#baselines-adopt-a-rule-step-by-step). |
+| `baseline_mode` | `lines` | tree-commit only. How the baseline identifies violations: `lines` or `count`. |
 
 ### Paths and patterns
 
@@ -96,6 +98,7 @@ These rules apply to patterns:
 
 - Patterns are regular expressions. tree-commit matches them anywhere in the path. To anchor a pattern, use `^` and `$`.
 - Always use forward slashes `/` for paths in patterns, also on Windows.
+- The patterns use Python syntax, as in pre-commit. Lookahead and lookbehind work, for example `exclude: ^(?!src/)` skips all files outside `src/`.
 - tree-commit supports the Python verbose mode `(?x)`. Thus, multi-line patterns that you copy from pre-commit config files work.
 
 ### File types
