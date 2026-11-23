@@ -155,41 +155,46 @@ func TestExecutorCommandScriptRelativeToRepository(t *testing.T) {
 	}
 }
 
-func TestPygrepGrep(t *testing.T) {
+func TestGrepFind(t *testing.T) {
 	data := []byte("first line\nfoo\r\nbar baz\nlast\n")
 	tests := []struct {
-		name    string
-		args    []string
-		entry   string
-		matched bool
-		out     string
+		name  string
+		args  []string
+		entry string
+		want  string
 	}{
-		{"single line", nil, "ba", true, "f:3:bar baz\n"},
-		{"CR is part of the line when matching", nil, "^foo$", false, ""},
-		{"ignore case", []string{"--ignore-case"}, "FOO", true, "f:2:foo\n"},
-		{"negate prints nothing", []string{"--negate"}, "foo", true, ""},
-		{"multiline", []string{"--multiline"}, `foo\r\nbar`, true, "f:2:foo\r\nbar\n"},
-		{"multiline dot matches newline", []string{"--multiline"}, `line.foo`, true, "f:1:line\nfoo\n"},
-		{"multiline no match", []string{"--multiline"}, `nope`, false, ""},
-		{"multiline negate", []string{"--multiline", "--negate"}, `last$`, true, ""},
+		{"single line", nil, "ba", "f:3:bar baz"},
+		{"CR is part of the line when matching", nil, "^foo$", ""},
+		{"ignore case", []string{"--ignore-case"}, "FOO", "f:2:foo"},
+		{"lookahead", nil, `^(?!first|last)\w+`, "f:2:foo;f:3:bar baz"},
+		{"negate with a match", []string{"--negate"}, "foo", ""},
+		{"negate without a match", []string{"--negate"}, "nope", "f"},
+		{"multiline", []string{"--multiline"}, `foo\r\nbar`, "f:2:foo\r\nbar"},
+		{"multiline dot matches newline", []string{"--multiline"}, `line.foo`, "f:1:line\nfoo"},
+		{"multiline no match", []string{"--multiline"}, `nope`, ""},
+		{"multiline negate", []string{"--multiline", "--negate"}, `last$`, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			opts, err := parsePygrep(&Hook{Entry: tt.entry, Args: tt.args})
+			opts, err := parseGrep(&Hook{Entry: tt.entry, Args: tt.args, Language: langGrep})
 			if err != nil {
 				t.Fatal(err)
 			}
-			var out bytes.Buffer
-			if got := opts.grep(&out, "f", data); got != tt.matched {
-				t.Errorf("grep matched = %v, want %v", got, tt.matched)
+			found, err := opts.find(data)
+			if err != nil {
+				t.Fatal(err)
 			}
-			if out.String() != tt.out {
-				t.Errorf("grep output = %q, want %q", out.String(), tt.out)
+			got := make([]string, len(found))
+			for i, v := range found {
+				got[i] = formatViolation("f", v)
+			}
+			if strings.Join(got, ";") != tt.want {
+				t.Errorf("violations = %q, want %q", strings.Join(got, ";"), tt.want)
 			}
 		})
 	}
 
-	if _, err := parsePygrep(&Hook{Entry: "("}); err == nil || !strings.Contains(err.Error(), "invalid pygrep pattern") {
+	if _, err := parseGrep(&Hook{Entry: "(", Language: langPygrep}); err == nil || !strings.Contains(err.Error(), "invalid pygrep pattern") {
 		t.Errorf("expected invalid pattern error, got %v", err)
 	}
 }
@@ -202,7 +207,7 @@ func TestRunPygrepNegateAndUnreadableFiles(t *testing.T) {
 	})
 	x := &executor{root: root}
 	run := func(entry string, args ...string) *hookResult {
-		return x.runPygrep(&hookRun{
+		return x.runGrep(&hookRun{
 			def: &hookDef{scope: &scope{dir: "sub"}, hook: &Hook{Entry: entry, Language: langPygrep, Args: args}},
 			files: []string{
 				filepath.Join("sub", "has.txt"), filepath.Join("sub", "missing.txt"),

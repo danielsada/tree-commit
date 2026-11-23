@@ -2,6 +2,7 @@
 # from upstream.
 import os, sys
 
+# TODO: support refunds
 def total(lines):
     # recieve a list of (description, amount) tuples
     t=0

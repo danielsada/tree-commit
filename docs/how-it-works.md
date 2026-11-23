@@ -393,7 +393,7 @@ To skip hooks for one run, use the `SKIP` variable, as in pre-commit: `SKIP=stri
 - **Repository clone or environment installation fails** (network, missing python): tree-commit reports the affected hooks as `Failed`. Other hooks still run.
 - **Hook exits with a non-zero code or changes files**: tree-commit reports the hook as `Failed`. Other hooks still run.
 - **Executable not found**: tree-commit reports the hook as `Failed`.
-- **Unsupported language in a hook repository** (all languages other than `system`, `script`, `python`, `node`, `golang`, `pygrep` and `fail`): tree-commit reports the hook as `Skipped`.
+- **Unsupported language in a hook repository** (all languages other than `system`, `script`, `python`, `node`, `golang`, `grep`, `pygrep` and `fail`): tree-commit reports the hook as `Skipped`.
 
 **Philosophy**: One broken hook does not stop the other hooks. Thus, you see all problems in one run. But any failure blocks the commit.
 

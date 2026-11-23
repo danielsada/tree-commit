@@ -25,7 +25,7 @@ With `pass_filenames: false`, the command runs one time without file names. tree
 | `python` | ✅ Runs from `PATH`. With `additional_dependencies`, runs in a virtual environment with those packages. | ✅ tree-commit installs the repository in a cached virtual environment. |
 | `node` | ✅ Same as `system`. With `additional_dependencies`, runs with those npm packages installed. | ✅ tree-commit installs the repository with npm. Node.js and npm must be on your `PATH`. |
 | `golang` | ✅ Same as `system`. With `additional_dependencies` (`module@version`), runs with those commands installed. | ✅ tree-commit builds the repository with `go install`. Go must be on your `PATH`. |
-| `pygrep` | ✅ Built in, see below. | ✅ |
+| `grep`, `pygrep` | ✅ Built in, see below. | ✅ |
 | `fail` | ✅ Built in, see below. | ✅ |
 | all other values (`rust`, `docker`, `ruby`, …) | ✅ Same as `system`: the tool must be on your `PATH`. | ⏭️ Reported as `Skipped`. |
 
@@ -39,23 +39,69 @@ With `uvx` and `npx`, most tools are available without a global installation. Th
   types: [python]
 ```
 
-### `pygrep`: forbid a pattern
+### `grep`: forbid a pattern
 
-`entry` is a regular expression. The hook fails for each line that matches it:
+`grep` is a built-in language of tree-commit. `entry` is a regular expression. The hook fails for each line that matches it:
 
 ```yaml
 - id: no-print
   name: no print() in library code
   entry: '^\s*print\('
-  language: pygrep
+  language: grep
   types: [python]
 ```
+
+The regular expressions use Python syntax, as in pre-commit. For example, lookahead works: `TODO(?!\(#\d+\))` matches a TODO without a ticket number.
 
 You can set these options with `args`:
 
 - `-i` / `--ignore-case`
-- `--multiline`: match across lines
-- `--negate`: fail for files that do **not** contain the pattern, for example a required license header
+- `--multiline`: match across lines. tree-commit reports only the first match of each file.
+- `--negate`: fail for files that do **not** contain the pattern, for example a required license header.
+
+`pygrep` is the same language, with the name that pre-commit uses. Hooks from repositories such as [pygrep-hooks](https://github.com/pre-commit/pygrep-hooks) use it.
+
+### Baselines: adopt a rule step by step
+
+A new rule often has many violations in existing code. A baseline lets you add the rule now and fix the old violations later:
+
+- The baseline file records the violations that exist now. tree-commit accepts them.
+- A new violation fails the hook.
+- When you fix a violation, tree-commit removes it from the baseline. The baseline can only get smaller (it is a ratchet).
+
+To use a baseline, do these steps:
+
+1. Add `baseline` to a `grep` or `pygrep` hook. The path is relative to the directory of the config file:
+
+   ```yaml
+   - id: todo-needs-ticket
+     name: TODO needs a ticket
+     entry: 'TODO(?!\(#\d+\))'
+     language: grep
+     types_or: [python, go, ts]
+     baseline: .grep-baseline.json
+   ```
+
+1. Record the current violations:
+
+   ```sh
+   tree-commit baseline todo-needs-ticket
+   ```
+
+1. Commit the config file and the baseline file.
+
+When a commit fixes a violation, tree-commit updates the baseline file. Then the hook fails, as a formatter does. Stage the baseline file and commit again.
+
+The `baseline_mode` option sets how the baseline identifies violations:
+
+| `baseline_mode` | The baseline records | A violation is new when |
+| --- | --- | --- |
+| `lines` (default) | The text of each matching line, without the indentation | Its text is not in the baseline, or it occurs more times than recorded |
+| `count` | The number of violations in each file | The file has more violations than recorded |
+
+`lines` mode continues to accept a violation when you move or reindent its line. `count` mode makes smaller baseline files, and it does not change when the text of a line changes. In `count` mode, tree-commit cannot tell which violation is new, so it reports all violations of the file.
+
+More than one hook can use the same baseline file. tree-commit keeps the entries of each hook separate. A hook never checks its own baseline file.
 
 ### `fail`: forbid files
 

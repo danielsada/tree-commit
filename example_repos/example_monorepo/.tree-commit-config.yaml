@@ -29,6 +29,16 @@ repos:
         language: system
         types_or: [python, pyi]
 
+      # First-party grep check with a ratchet: the TODOs recorded in
+      # .grep-baseline.json are accepted, new TODOs need a ticket, and the
+      # baseline shrinks when a TODO is resolved.
+      - id: todo-needs-ticket
+        name: TODO needs a ticket
+        entry: 'TODO(?!\(#\d+\))'
+        language: grep
+        types_or: [python, go, shell, ts, tsx, javascript]
+        baseline: .grep-baseline.json
+
       - id: codespell
         name: codespell
         entry: uvx codespell@2.4.3

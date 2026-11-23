@@ -30,6 +30,7 @@ const (
 	langGolang = "golang"
 	langFail   = "fail"
 	langPygrep = "pygrep"
+	langGrep   = "grep"
 
 	windows = "windows"
 )
@@ -77,6 +78,8 @@ type Hook struct {
 	IncludeFolders         []string `yaml:"include_folders"`
 	ExcludeFolders         []string `yaml:"exclude_folders"`
 	Disable                bool     `yaml:"disable"`
+	Baseline               string   `yaml:"baseline"`
+	BaselineMode           string   `yaml:"baseline_mode"`
 }
 
 func (h *Hook) passFilenames() bool {

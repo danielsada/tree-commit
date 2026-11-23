@@ -116,7 +116,7 @@ func TestExampleMonorepoResolution(t *testing.T) {
 
 	// legacy/ disables ruff and codespell but keeps the whitespace fixers.
 	assertHooks(t, plan, invoice,
-		[]string{"trailing-whitespace@.", "end-of-file-fixer@."},
+		[]string{"trailing-whitespace@.", "end-of-file-fixer@.", "todo-needs-ticket@."},
 		[]string{"ruff-check@.", "ruff-format@.", "codespell@."})
 
 	// infra/k8s/ overrides the remote check-yaml hook with extra args.
@@ -198,7 +198,7 @@ func TestExampleMonorepoEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	data = append(data, "\n\ndef helper(x):\n    print(x)\n    return x\n"...)
+	data = append(data, "\n\ndef helper(x):\n    print(x)  # TODO remove\n    return x\n"...)
 	if err := os.WriteFile(engine, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +207,8 @@ func TestExampleMonorepoEndToEnd(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("expected the strict core checks to fail, got %d\n%s", code, out)
 	}
-	for _, want := range []string{"ANN201", "D103", "no print() in library code"} {
+	// The new TODO fails; the baselined TODO in legacy/ does not.
+	for _, want := range []string{"ANN201", "D103", "no print() in library code", "TODO needs a ticket", "not in the baseline"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q:\n%s", want, out)
 		}

@@ -10,9 +10,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 )
@@ -42,6 +42,8 @@ type envProvider interface {
 }
 
 type executor struct {
+	baselineMu sync.Mutex // serializes updates of baseline files
+
 	ctx     context.Context
 	root    string
 	envs    envProvider
@@ -106,6 +108,11 @@ func footprintOf(r *hookRun) footprint {
 	}
 	for _, f := range r.files {
 		fp.files[f] = true
+	}
+	// A grep hook rewrites its baseline file, so it must not run at the same
+	// time as hooks that check that file.
+	if b := r.def.hook.Baseline; b != "" {
+		fp.files[filepath.Join(r.def.scope.dir, filepath.FromSlash(b))] = true
 	}
 	fp.wholeDir = !r.def.hook.passFilenames() || (r.def.hook.AlwaysRun && len(r.files) == 0)
 	return fp
@@ -173,8 +180,8 @@ func (x *executor) execute(r *hookRun) *hookResult {
 	switch d.hook.Language {
 	case langFail:
 		res = &hookResult{status: statusFailed, exitCode: 1, output: failOutput(d.hook.Entry, x.scopeFiles(r))}
-	case langPygrep:
-		res = x.runPygrep(r)
+	case langPygrep, langGrep:
+		res = x.runGrep(r)
 	default:
 		res = x.runCommand(r)
 	}
@@ -505,94 +512,6 @@ func hashFiles(root string, files []string) []byte {
 		_, _ = h.Write(sum[:])
 	}
 	return h.Sum(nil)
-}
-
-// pygrepOptions are the flags understood by the pygrep language.
-type pygrepOptions struct {
-	re        *regexp.Regexp
-	multiline bool
-	negate    bool
-}
-
-func parsePygrep(h *Hook) (*pygrepOptions, error) {
-	opts := &pygrepOptions{}
-	flags := ""
-	for _, a := range h.Args {
-		switch a {
-		case "-i", "--ignore-case":
-			flags += "i"
-		case "--multiline":
-			opts.multiline = true
-			flags += "ms"
-		case "--negate":
-			opts.negate = true
-		}
-	}
-	pattern := h.Entry
-	if flags != "" {
-		pattern = "(?" + flags + ")" + pattern
-	}
-	re, err := regexp.Compile(pattern)
-	if err != nil {
-		return nil, fmt.Errorf("invalid pygrep pattern: %w", err)
-	}
-	opts.re = re
-	return opts, nil
-}
-
-// grep writes the matches of data to out and reports whether there was a match.
-func (o *pygrepOptions) grep(out io.Writer, rel string, data []byte) bool {
-	if o.multiline {
-		loc := o.re.FindIndex(data)
-		if loc != nil && !o.negate {
-			line := bytes.Count(data[:loc[0]], []byte("\n")) + 1
-			fmt.Fprintf(out, "%s:%d:%s\n", rel, line, data[loc[0]:loc[1]])
-		}
-		return loc != nil
-	}
-	if len(data) == 0 {
-		return false
-	}
-	matched := false
-	// A trailing newline ends the last line; it does not start an empty one.
-	for i, line := range bytes.Split(bytes.TrimSuffix(data, []byte("\n")), []byte("\n")) {
-		if o.re.Match(line) {
-			matched = true
-			if !o.negate {
-				fmt.Fprintf(out, "%s:%d:%s\n", rel, i+1, bytes.TrimRight(line, "\r"))
-			}
-		}
-	}
-	return matched
-}
-
-// runPygrep implements pre-commit's built-in "pygrep" language: the entry is a
-// regular expression and the hook fails when it matches (or, with --negate,
-// when a file has no match).
-func (x *executor) runPygrep(r *hookRun) *hookResult {
-	opts, err := parsePygrep(r.def.hook)
-	if err != nil {
-		return &hookResult{status: statusFailed, note: err.Error()}
-	}
-
-	var out bytes.Buffer
-	res := &hookResult{status: statusPassed}
-	for _, f := range r.files {
-		data, err := os.ReadFile(filepath.Join(x.root, f)) //nolint:gosec // repo files
-		if err != nil {
-			continue
-		}
-		rel := relToScope(r.def.scope.dir, f)
-		matched := opts.grep(&out, rel, data)
-		if opts.negate && !matched {
-			fmt.Fprintln(&out, rel)
-		}
-		if matched != opts.negate {
-			res.status, res.exitCode = statusFailed, 1
-		}
-	}
-	res.output = out.Bytes()
-	return res
 }
 
 func (x *executor) paint(s, code string) string {

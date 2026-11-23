@@ -1,9 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 )
@@ -15,8 +15,8 @@ type scope struct {
 	depth  int
 	config *Config
 
-	filesRe   *regexp.Regexp
-	excludeRe *regexp.Regexp
+	filesRe   *pattern
+	excludeRe *pattern
 	defs      []*hookDef
 	resolved  bool
 }
@@ -31,8 +31,8 @@ type hookDef struct {
 	hook    *Hook
 	repoDir string // checkout of the hook repository (remote hooks only)
 
-	filesRe    *regexp.Regexp
-	excludeRe  *regexp.Regexp
+	filesRe    *pattern
+	excludeRe  *pattern
 	err        error  // resolution error, reported as a failed hook
 	skipReason string // set when the hook cannot be run by tree-commit
 	won        bool   // the hook won closest-wins for at least one file
@@ -51,9 +51,10 @@ type manifestSource interface {
 }
 
 type planOptions struct {
-	stage  string          // git hook stage, e.g. "pre-commit"
-	hookID string          // run only this hook id when set
-	skip   map[string]bool // hook ids to skip (SKIP env var)
+	allStages bool            // ignore stages (used to record baselines)
+	stage     string          // git hook stage, e.g. "pre-commit"
+	hookID    string          // run only this hook id when set
+	skip      map[string]bool // hook ids to skip (SKIP env var)
 }
 
 type resolver struct {
@@ -68,7 +69,7 @@ type resolver struct {
 // hooks that come from a remote repository manifest.
 var supportedRemoteLanguages = map[string]bool{
 	langSystem: true, langScript: true, langPython: true, langNode: true, langGolang: true,
-	langFail: true, langPygrep: true,
+	langFail: true, langPygrep: true, langGrep: true,
 }
 
 // scopesFromTree converts a discovered config tree into scopes.
@@ -203,6 +204,9 @@ func (r *resolver) active(d *hookDef) bool {
 	if r.opts.hookID != "" && r.opts.hookID != d.id {
 		return false
 	}
+	if r.opts.allStages {
+		return true
+	}
 	return d.hook.runsInStage(r.opts.stage, d.scope.config.DefaultStages)
 }
 
@@ -264,6 +268,9 @@ func (r *resolver) resolveHook(sc *scope, repo *RepoConfig, raw map[string]any) 
 		d.hook.Types = []string{"file"}
 	}
 
+	if err = validateBaseline(d.hook); err != nil {
+		return fallback(fmt.Errorf("%s: hook %q: %w", sc.path, id, err))
+	}
 	if d.filesRe, err = compilePattern(d.hook.Files); err != nil {
 		return fallback(fmt.Errorf("%s: hook %q: invalid 'files' pattern: %w", sc.path, id, err))
 	}
@@ -305,6 +312,10 @@ func (r *resolver) matches(d *hookDef, file string) bool {
 	sc, h := d.scope, d.hook
 
 	if !folderIncluded(rel, h.IncludeFolders) || folderExcluded(rel, h.ExcludeFolders) {
+		return false
+	}
+	// A grep hook never checks its own baseline, which contains the matches.
+	if h.Baseline != "" && rel == filepath.Clean(filepath.FromSlash(h.Baseline)) {
 		return false
 	}
 	// Patterns are written with forward slashes, like in pre-commit.
@@ -376,50 +387,24 @@ func folderExcluded(rel string, folders []string) bool {
 	return false
 }
 
-// compilePattern compiles a pre-commit style regular expression. Patterns are
-// matched with search semantics (unanchored), like Python's re.search. Python's
-// verbose flag "(?x)" is not supported by RE2, so it is expanded here.
-func compilePattern(pattern string) (*regexp.Regexp, error) {
-	if pattern == "" {
-		return nil, nil
-	}
-	trimmed := strings.TrimSpace(pattern)
-	if strings.HasPrefix(trimmed, "(?x)") {
-		pattern = stripVerbose(strings.TrimPrefix(trimmed, "(?x)"))
-	}
-	return regexp.Compile(pattern)
-}
-
-// stripVerbose removes unescaped whitespace and # comments outside character classes.
-func stripVerbose(p string) string {
-	var b strings.Builder
-	inClass, inComment, escaped := false, false, false
-	for _, r := range p {
-		switch {
-		case inComment:
-			if r == '\n' {
-				inComment = false
-			}
-		case escaped:
-			b.WriteRune(r)
-			escaped = false
-		case r == '\\':
-			b.WriteRune(r)
-			escaped = true
-		case inClass:
-			b.WriteRune(r)
-			if r == ']' {
-				inClass = false
-			}
-		case r == '[':
-			b.WriteRune(r)
-			inClass = true
-		case r == '#':
-			inComment = true
-		case r == ' ' || r == '\t' || r == '\n' || r == '\r':
-		default:
-			b.WriteRune(r)
+// validateBaseline checks the baseline options of a hook.
+func validateBaseline(h *Hook) error {
+	if h.Baseline == "" {
+		if h.BaselineMode != "" {
+			return errors.New("baseline_mode needs a baseline file")
 		}
+		return nil
 	}
-	return b.String()
+	if h.Language != langGrep && h.Language != langPygrep {
+		return fmt.Errorf("baseline is only supported for grep and pygrep hooks, not %q", h.Language)
+	}
+	if filepath.IsAbs(h.Baseline) || !isWithin(rootDir, filepath.Clean(filepath.FromSlash(h.Baseline))) {
+		return fmt.Errorf("baseline %q must be a path inside the config file's directory", h.Baseline)
+	}
+	switch h.BaselineMode {
+	case "", baselineLines, baselineCount:
+		return nil
+	default:
+		return fmt.Errorf("baseline_mode must be %q or %q, not %q", baselineLines, baselineCount, h.BaselineMode)
+	}
 }
