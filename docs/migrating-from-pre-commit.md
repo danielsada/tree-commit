@@ -81,6 +81,7 @@ This table shows the differences between pre-commit and tree-commit:
 | Remote hook languages | All | `system`, `script`, `python`, `pygrep`, `fail`; other languages are skipped |
 | Hook types installed | `pre-commit`, `pre-push`, `commit-msg`, … | `pre-commit` only; run other stages with `--hook-stage` |
 | `meta` hooks, `minimum_pre_commit_version`, `ci:` | Supported | Ignored |
+| prek's `repo: builtin` | Not supported | Runs the hooks from pre-commit-hooks v6.0.0 |
 | Parallelism | In a hook | Also across hooks that touch different files |
 
 The most important difference is **unstaged changes**. If you stage only part of a file, hooks check the full file as it is on disk. Formatters can also change lines that you did not stage.

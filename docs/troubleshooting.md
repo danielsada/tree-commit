@@ -37,13 +37,23 @@ With `pass_filenames: false`, any change to tracked files in the directory of th
 
 ## `python 3 is required for python hooks but was not found`
 
-Remote hooks in Python need Python 3 to create a virtual environment. Local `python` hooks with `additional_dependencies` also need it. Install Python 3, or set tree-commit to use a specific interpreter:
+To fix this, install [uv](https://docs.astral.sh/uv/). tree-commit then uses uv to create virtual environments.
+
+
+Remote hooks in Python need a virtual environment. If uv is not on your `PATH`, tree-commit needs Python 3 to create it. Local `python` hooks with `additional_dependencies` also need it. Install Python 3, or set tree-commit to use a specific interpreter:
 
 ```sh
 export TREE_COMMIT_PYTHON=/usr/bin/python3.12
 ```
 
 On Windows, make sure that `python` is a real interpreter and not the Microsoft Store shortcut.
+
+## `creating the virtualenv failed`
+
+On Debian and Ubuntu, Python cannot create virtual environments without the `python3-venv` package. To fix this, do one of these steps:
+
+- Install [uv](https://docs.astral.sh/uv/) (recommended). tree-commit uses uv when it is on your `PATH`.
+- Install the `python3-venv` package, for example `sudo apt install python3-venv`.
 
 ## `pip install failed` or a remote repository does not download
 

@@ -122,4 +122,5 @@ tree-commit uses these environment variables:
 | `SKIP` | A comma-separated list of hook ids to skip, for example `SKIP=pytest,eslint git commit`. |
 | `TREE_COMMIT_HOME` | The cache directory. |
 | `TREE_COMMIT_PYTHON` | The Python interpreter that tree-commit uses to create virtual environments. |
+| `TREE_COMMIT_UV` | The `uv` executable that tree-commit uses to create virtual environments. Set it to `0` to use Python's `venv` module instead. By default, tree-commit uses `uv` if it is on your `PATH`. |
 | `NO_COLOR` | Set to any value to disable colors. |

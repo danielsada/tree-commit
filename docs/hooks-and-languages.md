@@ -84,7 +84,8 @@ repos:
 These rules apply to remote hooks:
 
 - tree-commit clones the repository at `rev` the first time that it needs it. After that, it uses the copy in the cache.
-- Python hooks get their own virtual environment, with the repository installed in it. For this, Python 3 must be on your `PATH`, or you must set `TREE_COMMIT_PYTHON`.
+- Python hooks get their own virtual environment, with the repository installed in it. If [uv](https://docs.astral.sh/uv/) is on your `PATH`, tree-commit uses it to create the environment. This is faster, and uv can download Python if necessary. Without uv, Python 3 must be on your `PATH`, or you must set `TREE_COMMIT_PYTHON`.
+- `repo: builtin` (from [prek](https://github.com/j178/prek)) does not need a `rev`. tree-commit runs these hooks from [pre-commit-hooks](https://github.com/pre-commit/pre-commit-hooks) v6.0.0.
 - Each option that you set (`args`, `files`, `exclude`, `types`, `stages`, …) replaces the value from the repository.
 - `repo` can also be a local path. This is useful when you test your own hook repository.
 

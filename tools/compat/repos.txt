@@ -1,0 +1,10 @@
+nunchux-ai/ComfyUI-nunchaku
+CookieMonsterTeam/CookieMonster
+sphinx-gallery/sphinx-gallery
+fredrikaverpil/creosote
+pyapp-kit/magicgui
+TorchSim/torch-sim
+Quantco/glum
+mozilla-ai/any-agent
+FujitsuResearch/OneCompression
+projecthorus/radiosonde_auto_rx

@@ -42,7 +42,11 @@ def main() -> None:
         "",
         "//go:generate python tools/gen_filetypes.py",
         "",
-        go_map("extensionTags", "extensionTags maps lower-case file extensions to type tags.", ext["EXTENSIONS"]),
+        go_map(
+            "extensionTags",
+            "extensionTags maps lower-case file extensions to type tags.",
+            ext["EXTENSIONS"],
+        ),
         "",
         go_map(
             "extensionTagsNeedBinaryCheck",
@@ -52,7 +56,11 @@ def main() -> None:
         "",
         go_map("nameTags", "nameTags maps well-known file names to type tags.", ext["NAMES"]),
         "",
-        go_map("interpreterTags", "interpreterTags maps shebang interpreters to type tags.", interp["INTERPRETERS"]),
+        go_map(
+            "interpreterTags",
+            "interpreterTags maps shebang interpreters to type tags.",
+            interp["INTERPRETERS"],
+        ),
         "",
     ]
     with open("filetypes_data.go", "w", encoding="utf-8", newline="\n") as fh:

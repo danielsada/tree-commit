@@ -13,6 +13,7 @@ Use this table to find the correct page:
 | [Command line](cli.md) | find a command, flag or environment variable |
 | [Recipes](recipes.md) | copy a ready-made configuration (uv and ruff, Go, CI, …) |
 | [Migrating from pre-commit](migrating-from-pre-commit.md) | migrate an existing pre-commit configuration |
+| [Compatibility report](compatibility.md) | see how tree-commit compares with pre-commit on real projects |
 | [Troubleshooting](troubleshooting.md) | fix an error |
 | [Development](development.md) | work on tree-commit itself |
 
