@@ -237,7 +237,7 @@ func (x *executor) runCommand(r *hookRun) *hookResult {
 
 	batches := [][]string{nil}
 	if d.hook.passFilenames() {
-		batches = partitionFiles(x.scopeFiles(r), maxCommandLength()-commandLength(argv))
+		batches = partitionFiles(x.scopeFiles(r), maxCommandLength(argv[0])-commandLength(argv))
 	}
 
 	res := &hookResult{status: statusPassed}
@@ -247,6 +247,7 @@ func (x *executor) runCommand(r *hookRun) *hookResult {
 		cmd := exec.CommandContext(x.ctx, argv[0], args...)
 		cmd.Dir = x.scopeDir(d)
 		cmd.Env = env
+		quoteForBatch(cmd)
 		out, err := cmd.CombinedOutput()
 		output.Write(out)
 		if err != nil {
@@ -302,7 +303,7 @@ func (x *executor) command(d *hookDef) (argv, env []string, err error) {
 		return nil, nil, err
 	}
 	argv[0] = exe
-	return wrapShebang(argv), env, nil
+	return wrapShebang(argv, x.scopeDir(d), pathEnv), env, nil
 }
 
 func envKeyEqual(a, b string) bool {
@@ -394,6 +395,10 @@ func resolveExecutable(name, dir, pathEnv string) (string, error) {
 		if d == "" {
 			continue
 		}
+		// The hook runs in dir, so that is where relative PATH entries point.
+		if !filepath.IsAbs(d) {
+			d = filepath.Join(dir, d)
+		}
 		for _, c := range candidates(name) {
 			if full := filepath.Join(d, c); isExecutableFile(full) {
 				return full, nil
@@ -404,8 +409,9 @@ func resolveExecutable(name, dir, pathEnv string) (string, error) {
 }
 
 // wrapShebang makes "#!" scripts runnable on Windows by invoking their interpreter
-// (or Git's sh) explicitly. It is a no-op on other platforms.
-func wrapShebang(argv []string) []string {
+// (or Git's sh) explicitly, looked up in the hook's PATH so that virtualenvs are
+// honored. It is a no-op on other platforms.
+func wrapShebang(argv []string, dir, pathEnv string) []string {
 	if runtime.GOOS != windows || hasExecutableExtension(argv[0]) {
 		return argv
 	}
@@ -418,18 +424,35 @@ func wrapShebang(argv []string) []string {
 		return argv
 	}
 	for _, name := range []string{interp, "sh"} {
-		if p, err := exec.LookPath(name); err == nil {
+		if p, err := resolveExecutable(name, dir, pathEnv); err == nil {
 			return append([]string{p, filepath.ToSlash(argv[0])}, argv[1:]...)
 		}
 	}
 	return argv
 }
 
-func maxCommandLength() int {
-	if runtime.GOOS == windows {
+// isBatchFile reports whether exe is a Windows batch file, which runs through cmd.exe.
+func isBatchFile(exe string) bool {
+	ext := strings.ToLower(filepath.Ext(exe))
+	return runtime.GOOS == windows && (ext == ".bat" || ext == ".cmd")
+}
+
+// maxCommandLength returns the command line budget for exe. cmd.exe, which runs
+// batch files such as npm's eslint.cmd, has a much lower limit than CreateProcess.
+func maxCommandLength(exe string) int {
+	switch {
+	case isBatchFile(exe):
+		const cmdExeLimit = 8191
+		comspec := os.Getenv("ComSpec")
+		if comspec == "" {
+			comspec = "cmd.exe"
+		}
+		return cmdExeLimit - len(comspec) - len(" /c ") - 1024
+	case runtime.GOOS == windows:
 		return 30000
+	default:
+		return 100000
 	}
-	return 100000
 }
 
 func commandLength(argv []string) int {
@@ -520,8 +543,12 @@ func (o *pygrepOptions) grep(out io.Writer, rel string, data []byte) bool {
 		}
 		return loc != nil
 	}
+	if len(data) == 0 {
+		return false
+	}
 	matched := false
-	for i, line := range bytes.Split(data, []byte("\n")) {
+	// A trailing newline ends the last line; it does not start an empty one.
+	for i, line := range bytes.Split(bytes.TrimSuffix(data, []byte("\n")), []byte("\n")) {
 		if o.re.Match(line) {
 			matched = true
 			if !o.negate {

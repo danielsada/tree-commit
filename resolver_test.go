@@ -117,8 +117,10 @@ func TestBuildPlanOrdersDeeperConfigsFirst(t *testing.T) {
 		{dir: rootDir, path: ".tree-commit-config.yaml", config: cfg("validator")},
 		{dir: "frontend", path: filepath.Join("frontend", ".tree-commit-config.yaml"), depth: 1, config: cfg("formatter", "linter")},
 	}
+	root := t.TempDir()
+	writeFiles(t, root, map[string]string{"frontend/src/App.js": "x\n"})
 	file := filepath.Join("frontend", "src", "App.js")
-	plan := buildPlan(t.TempDir(), scopes, []string{file}, nil, planOptions{stage: "pre-commit"})
+	plan := buildPlan(root, scopes, []string{file}, nil, planOptions{stage: "pre-commit"})
 
 	var ids []string
 	for _, r := range plan {

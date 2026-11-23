@@ -57,7 +57,7 @@ func init() {
 	f.BoolVarP(&runOpts.allFiles, "all-files", "a", false, "run on all files tracked by git")
 	f.StringSliceVar(&runOpts.files, "files", nil, "run on these files instead of the staged files")
 	f.StringVar(&runOpts.stage, "hook-stage", runOpts.stage, "only run hooks configured for this stage")
-	f.BoolVar(&runOpts.dryRun, "dry-run", false, "print which hooks would run on which files, without running them")
+	f.BoolVar(&runOpts.dryRun, "dry-run", false, "print which hooks would run on which files, without running them (remote hook repositories are still fetched)")
 	f.BoolVarP(&runOpts.verbose, "verbose", "v", false, "show output of passing hooks and durations")
 	f.IntVarP(&runOpts.jobs, "jobs", "j", runOpts.jobs, "maximum number of hooks to run in parallel")
 	f.StringVar(&runOpts.color, "color", runOpts.color, "colorize output: auto, always or never")

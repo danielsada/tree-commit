@@ -95,7 +95,7 @@ repos:
       - id: check-yaml
 ```
 
-Supported hook fields: `id`, `name`, `entry`, `language`, `files`, `exclude`, `types`, `types_or`, `exclude_types`, `args`, `pass_filenames`, `always_run`, `stages`, `additional_dependencies`, `verbose`, and the top-level `files` / `exclude`. Python's verbose regex flag `(?x)` is supported.
+Supported hook fields: `id`, `name`, `entry`, `language`, `files`, `exclude`, `types` (default `[file]`, so symlinks are skipped), `types_or`, `exclude_types`, `args`, `pass_filenames`, `always_run`, `stages`, `additional_dependencies`, `verbose`, and the top-level `files`, `exclude` and `default_stages`. Python's verbose regex flag `(?x)` is supported.
 
 tree-commit adds:
 
@@ -126,7 +126,7 @@ tree-commit run                    # run on staged files (what the git hook does
 tree-commit run --all-files        # run on every tracked file
 tree-commit run --files a.go,b.py  # run on specific files
 tree-commit run go-test            # run a single hook id
-tree-commit run --dry-run          # show which hooks would run on which files, and in which order
+tree-commit run --dry-run          # show which hooks would run on which files, and in which order (still fetches remote repos)
 tree-commit tree                   # show the config tree of the repository
 SKIP=go-test,eslint git commit     # skip hooks by id, like pre-commit
 ```

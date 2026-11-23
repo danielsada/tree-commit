@@ -71,7 +71,7 @@ tree-commit adds two optional hook fields:
 - `include_folders`: the file must be inside one of these folders. An empty list or `.` means everything.
 - `exclude_folders`: the file must not be inside one of these folders. `build/` excludes `build/x.js` and also nested `pkg/build/x.js`.
 
-They are applied together with `files`, `exclude`, `types`, `types_or` and `exclude_types`.
+They are applied together with `files`, `exclude`, `types`, `types_or` and `exclude_types`. As in pre-commit, `types` defaults to `[file]`, so symlinks are only passed to hooks that ask for them.
 
 ---
 

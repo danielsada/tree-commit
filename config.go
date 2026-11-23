@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -31,9 +32,10 @@ var configFileNames = []string{treeCommitConfigFile, preCommitConfigFile}
 
 // Config is the content of a single .tree-commit-config.yaml (or .pre-commit-config.yaml).
 type Config struct {
-	Repos   []RepoConfig `yaml:"repos"`
-	Files   string       `yaml:"files"`
-	Exclude string       `yaml:"exclude"`
+	Repos         []RepoConfig `yaml:"repos"`
+	Files         string       `yaml:"files"`
+	Exclude       string       `yaml:"exclude"`
+	DefaultStages []string     `yaml:"default_stages"`
 }
 
 // RepoConfig is one entry of the top-level repos list.
@@ -73,13 +75,33 @@ func (h *Hook) passFilenames() bool {
 	return h.PassFilenames == nil || *h.PassFilenames
 }
 
-// runsInStage reports whether the hook is configured to run for the given git hook stage.
-func (h *Hook) runsInStage(stage string) bool {
-	if len(h.Stages) == 0 {
+// legacyStages maps pre-commit's old stage names to git hook names.
+var legacyStages = map[string]string{
+	"commit":       "pre-commit",
+	"merge-commit": "pre-merge-commit",
+	"push":         "pre-push",
+}
+
+func normalizeStage(stage string) string {
+	if s, ok := legacyStages[stage]; ok {
+		return s
+	}
+	return stage
+}
+
+// runsInStage reports whether the hook is configured to run for the given git
+// hook stage. Hooks without stages fall back to the config's default_stages.
+func (h *Hook) runsInStage(stage string, defaults []string) bool {
+	stages := h.Stages
+	if len(stages) == 0 {
+		stages = defaults
+	}
+	if len(stages) == 0 {
 		return true
 	}
-	for _, s := range h.Stages {
-		if s == stage || (stage == "pre-commit" && s == "commit") {
+	stage = normalizeStage(stage)
+	for _, s := range stages {
+		if normalizeStage(s) == stage {
 			return true
 		}
 	}
@@ -110,6 +132,11 @@ func (c *Config) validate() error {
 		}
 		if repo.Repo != repoLocal && repo.Repo != repoMeta && repo.Rev == "" {
 			return fmt.Errorf("repos[%d] (%s): missing required field 'rev'", i, repo.Repo)
+		}
+		// Both values are passed to git; a leading dash would be parsed as an option
+		// (e.g. --upload-pack=<command>).
+		if strings.HasPrefix(repo.Repo, "-") || strings.HasPrefix(repo.Rev, "-") {
+			return fmt.Errorf("repos[%d]: 'repo' and 'rev' must not start with '-'", i)
 		}
 		for j, raw := range repo.Hooks {
 			if id, _ := raw["id"].(string); id == "" {

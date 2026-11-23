@@ -118,22 +118,20 @@ func nodeDescription(node *ConfigNode) string {
 }
 
 // DiscoverConfigs walks a directory tree and returns every config file found
-// (see configFileNames). It uses git when possible, so ignored files are skipped,
-// and falls back to walking the filesystem.
+// (see configFileNames). Inside a git work tree it uses git, so ignored files
+// are skipped; elsewhere it walks the filesystem.
 func DiscoverConfigs(rootDir string) (*ConfigTree, error) {
-	if configTree, err := discoverConfigsGit(rootDir); err == nil {
-		return configTree, nil
+	if _, err := gitOutput(rootDir, "rev-parse", "--is-inside-work-tree"); err != nil {
+		return discoverConfigsFileSystem(rootDir)
 	}
-	return discoverConfigsFileSystem(rootDir)
+	return discoverConfigsGit(rootDir)
 }
 
-// discoverConfigsGit uses git ls-files to find tracked and untracked (but not ignored) config files.
+// discoverConfigsGit uses git ls-files to find tracked and untracked (but not
+// ignored) config files that exist in the work tree.
 func discoverConfigsGit(rootDir string) (*ConfigTree, error) {
-	if _, err := gitOutput(rootDir, "rev-parse", "--git-dir"); err != nil {
-		return nil, fmt.Errorf("not in a git repository: %w", err)
-	}
-
-	args := []string{"ls-files", "-z", "--cached", "--others", "--exclude-standard", "--"}
+	args := make([]string, 0, 6+len(configFileNames))
+	args = append(args, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--")
 	for _, name := range configFileNames {
 		args = append(args, ":(glob)**/"+name)
 	}
@@ -142,7 +140,14 @@ func discoverConfigsGit(rootDir string) (*ConfigTree, error) {
 		return nil, err
 	}
 
-	return buildConfigTree(rootDir, selectConfigFiles(gitPaths(output)))
+	var present []string
+	for _, p := range gitPaths(output) {
+		// Deleted but not yet staged configs are still listed by --cached.
+		if fileExists(filepath.Join(rootDir, p)) {
+			present = append(present, p)
+		}
+	}
+	return buildConfigTree(rootDir, selectConfigFiles(present))
 }
 
 // discoverConfigsFileSystem uses filepath.WalkDir to find config files.

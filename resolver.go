@@ -199,7 +199,7 @@ func (r *resolver) active(d *hookDef) bool {
 	if r.opts.hookID != "" && r.opts.hookID != d.id {
 		return false
 	}
-	return d.hook.runsInStage(r.opts.stage)
+	return d.hook.runsInStage(r.opts.stage, d.scope.config.DefaultStages)
 }
 
 // defsFor resolves (once) every hook defined in a scope's config file.
@@ -251,6 +251,10 @@ func (r *resolver) resolveHook(sc *scope, repo *RepoConfig, raw map[string]any) 
 	}
 	if d.hook.Name == "" {
 		d.hook.Name = id
+	}
+	// Like pre-commit, hooks only receive regular files (not symlinks) by default.
+	if len(d.hook.Types) == 0 {
+		d.hook.Types = []string{"file"}
 	}
 
 	if d.filesRe, err = compilePattern(d.hook.Files); err != nil {
@@ -309,9 +313,6 @@ func (r *resolver) matches(d *hookDef, file string) bool {
 	}
 	if d.excludeRe != nil && d.excludeRe.MatchString(pattern) {
 		return false
-	}
-	if len(h.Types)+len(h.TypesOr)+len(h.ExcludeTypes) == 0 {
-		return true
 	}
 	tags := r.tags(file)
 	return tags != nil && matchesTypes(tags, h.Types, h.TypesOr, h.ExcludeTypes)

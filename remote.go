@@ -135,10 +135,10 @@ func cloneAtRev(repo, rev, dest string) error {
 	if err := git("init", "-q"); err != nil {
 		return err
 	}
-	if err := git("remote", "add", "origin", repo); err != nil {
+	if err := git("remote", "add", "--end-of-options", "origin", repo); err != nil {
 		return err
 	}
-	if err := git("fetch", "-q", "--depth", "1", "origin", rev); err == nil {
+	if err := git("fetch", "-q", "--depth", "1", "--end-of-options", "origin", rev); err == nil {
 		if err := git("-c", "advice.detachedHead=false", "checkout", "-q", "FETCH_HEAD"); err != nil {
 			return err
 		}

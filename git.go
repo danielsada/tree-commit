@@ -37,10 +37,10 @@ func repoRoot(dir string) (string, error) {
 	return filepath.FromSlash(strings.TrimSpace(out)), nil
 }
 
-// stagedFiles returns the added, copied, modified and renamed files in the index,
-// relative to the repository root.
+// stagedFiles returns the files staged in the index, except deletions (like
+// pre-commit), relative to the repository root.
 func stagedFiles(root string) ([]string, error) {
-	out, err := gitOutput(root, "diff", "--cached", "--name-only", "--diff-filter=ACMR", "--no-ext-diff", "-z")
+	out, err := gitOutput(root, "diff", "--cached", "--name-only", "--diff-filter=ACMRTUXB", "--no-ext-diff", "-z")
 	if err != nil {
 		return nil, err
 	}
