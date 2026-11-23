@@ -1,151 +1,117 @@
 # tree-commit
 
-A tree-based git hook runner that is compatible with [pre-commit](https://pre-commit.com) hooks.
+**Git hooks for monorepos.** Put a hook config in any folder, and its checks only run on the files in that folder.
 
-Put a `.tree-commit-config.yaml` (same format as `.pre-commit-config.yaml`) in **any directory** of your repository. Its hooks only run on changed files below that directory, from that directory, and a config closer to the code overrides hooks with the same id from its parents. Every team in a monorepo owns its own checks, and nobody runs `eslint` because they touched a Go file.
+tree-commit reads the same config format as [pre-commit](https://pre-commit.com) and runs the same hooks. The difference is that you can have **one config per directory** instead of one for the whole repository:
 
 ```
-repo/
-├── .tree-commit-config.yaml        # trailing-whitespace, end-of-file-fixer for everything
-├── frontend/
-│   ├── .tree-commit-config.yaml    # eslint, prettier, tsc (run inside frontend/)
-│   └── src/App.tsx
-├── go_lib/
-│   ├── .tree-commit-config.yaml    # gofmt, go vet, go test ./... (run inside go_lib/)
-│   └── pkg/math.go
-└── python_lib/
-    ├── .tree-commit-config.yaml    # black, flake8
-    └── src/
-        └── .tree-commit-config.yaml  # overrides "black" with --line-length 79
+my-repo/
+├── .tree-commit-config.yaml          ← whitespace, YAML and spelling checks for everything
+├── backend/
+│   ├── .tree-commit-config.yaml      ← ruff and pytest, only for backend/ files
+│   └── app.py
+└── frontend/
+    ├── .tree-commit-config.yaml      ← eslint and prettier, only for frontend/ files
+    └── src/App.tsx
 ```
 
-```console
-$ git commit -m "Fix rounding"
-Go Format (go_lib/)......................................................Passed
-Go Vet (go_lib/).........................................................Passed
-Go Test (go_lib/)........................................................Failed
-- hook id: go-test
-- exit code: 1
-
---- FAIL: TestRound (0.00s)
-    math_test.go:12: Round(2.5) = 2, want 3
-
-trim trailing whitespace.................................................Passed
-```
-
-## Why
-
-pre-commit is great, but it has one config for the whole repository. In a monorepo that means:
-
-- one huge config with `files:` regexes like `^services/payments/.*\.py$` everywhere,
-- hooks like `go test ./...` or `tsc` that need to run from a sub-project directory,
-- every team editing the same file, and every commit evaluating every hook.
-
-tree-commit keeps the pre-commit format and the pre-commit hook ecosystem, and makes the config **hierarchical**:
-
-| | pre-commit | tree-commit |
-|---|---|---|
-| Config files | one, at the root | one per directory, any depth |
-| Patterns are matched against | repo-relative paths | paths relative to the config's directory |
-| Hooks run from | repository root | the config's directory |
-| Same hook id in two places | runs twice | the config closest to the file wins |
-| Parallelism | batches of one hook | different hooks run in parallel when they don't share files |
+Change `backend/app.py` and commit: the root checks and the backend checks run. The frontend checks don't.
 
 ## Install
+
+You need [Go](https://go.dev/dl/) 1.23 or newer and git.
 
 ```sh
 go install github.com/danielsada/tree-commit@latest
 ```
 
-Then, in your repository:
+Check that it works:
 
 ```sh
-tree-commit install      # installs .git/hooks/pre-commit
+tree-commit --version
 ```
 
-An existing hook is kept as `pre-commit.tree-commit-legacy` and still runs first (a hook installed by the pre-commit framework is kept but not run, since tree-commit reads `.pre-commit-config.yaml` itself). `tree-commit uninstall` restores it. `core.hooksPath` and git worktrees are supported.
+## Quick start
 
-## Configuration
-
-A config file is a pre-commit config. A root `.pre-commit-config.yaml` works as is; tree-commit looks for `.tree-commit-config.yaml` first and falls back to `.pre-commit-config.yaml` in every directory.
+**1. Add a config** to any folder. Here is one for a Python project, using [uv](https://docs.astral.sh/uv/) to run [ruff](https://docs.astral.sh/ruff/) without installing it:
 
 ```yaml
-# go_lib/.tree-commit-config.yaml
+# backend/.tree-commit-config.yaml
 repos:
   - repo: local
     hooks:
-      - id: gofmt
-        name: Go Format
-        entry: gofmt -l -w
+      - id: ruff-check
+        name: ruff check
+        entry: uvx ruff check --fix
         language: system
-        files: \.go$             # matched against paths relative to go_lib/
-        exclude_folders: [vendor/]
+        types: [python]
 
-      - id: go-test
-        name: Go Test
-        entry: go test ./...     # runs inside go_lib/
+      - id: pytest
+        name: pytest
+        entry: uv run pytest -q    # runs inside backend/
         language: system
-        files: \.go$
+        types: [python]
         pass_filenames: false
-
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.4.0
-    hooks:
-      - id: trailing-whitespace
-      - id: check-yaml
 ```
 
-Supported hook fields: `id`, `name`, `entry`, `language`, `files`, `exclude`, `types` (default `[file]`, so symlinks are skipped), `types_or`, `exclude_types`, `args`, `pass_filenames`, `always_run`, `stages`, `additional_dependencies`, `verbose`, and the top-level `files`, `exclude` and `default_stages`. Python's verbose regex flag `(?x)` is supported.
-
-tree-commit adds:
-
-| Field | Meaning |
-|---|---|
-| `include_folders` | Only run on files inside these folders (relative to the config). `.` means everything. |
-| `exclude_folders` | Never run on files inside these folders. `build/` also excludes nested `a/build/`. |
-| `disable: true` | Turn off a hook inherited from a parent config, for this directory. |
-
-See [CONFLICT_RESOLUTION.md](CONFLICT_RESOLUTION.md) for the full resolution rules (scope, closest-wins, ordering and parallelism).
-
-### Languages
-
-| Language | Local hooks (`repo: local`) | Remote hooks (`repo: https://...`) |
-|---|---|---|
-| `system` | ✅ runs `entry` from `PATH` | ✅ |
-| `script` | ✅ relative to the config directory | ✅ relative to the hook repository |
-| `python` | ✅ in a virtualenv when `additional_dependencies` is set, otherwise from `PATH` | ✅ repository installed in a cached virtualenv |
-| `pygrep`, `fail` | ✅ built in | ✅ built in |
-| `node`, `golang`, `rust`, `docker`, … | ✅ treated as `system` (the tool must be on `PATH`) | ⏭️ reported as skipped |
-
-Remote repositories are cloned at `rev` into the cache (`$TREE_COMMIT_HOME`, or your user cache directory under `tree-commit/`). `tree-commit clean` removes it.
-
-## Usage
+**2. Install the git hook** in your repository:
 
 ```sh
-tree-commit run                    # run on staged files (what the git hook does)
-tree-commit run --all-files        # run on every tracked file
-tree-commit run --files a.go,b.py  # run on specific files
-tree-commit run go-test            # run a single hook id
-tree-commit run --dry-run          # show which hooks would run on which files, and in which order (still fetches remote repos)
-tree-commit tree                   # show the config tree of the repository
-SKIP=go-test,eslint git commit     # skip hooks by id, like pre-commit
+tree-commit install
 ```
 
-`run` exits with status 1 when any hook fails or modifies files (for `pass_filenames: false` hooks, any change to tracked files in their directory counts). Other flags: `--jobs`, `--verbose`, `--color`, `--hook-stage`, and `-c/--config` to use a different config file name.
+**3. Commit as usual.** tree-commit checks the files you staged:
 
-## Limitations
+```console
+$ git commit -m "Add the orders endpoint"
+ruff check (backend/)....................................................Failed
+- hook id: ruff-check
+- exit code: 1
 
-- Unstaged changes are not stashed before running hooks, so hooks see the working tree version of partially staged files.
-- Only `system`, `script`, `python`, `pygrep` and `fail` hooks are installed from remote repositories.
-- `meta` hooks and `minimum_pre_commit_version` are ignored.
+F821 Undefined name `order`
+ --> app.py:2:41
+  |
+1 | def total(orders):
+2 |     return sum(order.price for order in order)
+  |                                         ^^^^^
 
-## Development
+Found 1 error.
+
+pytest (backend/)........................................................Passed
+trim trailing whitespace.................................................Passed
+```
+
+If a check fails, or a hook fixes a file for you, the commit stops. Look at the output, `git add` the fixes, and commit again.
+
+## Everyday commands
 
 ```sh
-go test ./...
-golangci-lint run
+tree-commit run                 # check staged files, like the git hook does
+tree-commit run --all-files     # check every file in the repository
+tree-commit run ruff-check      # run one hook only
+tree-commit run --dry-run       # show which hooks would run, without running them
+tree-commit tree                # show where your configs are
+SKIP=pytest git commit          # skip a hook once
+tree-commit uninstall           # remove the git hook
 ```
 
-`example_repos/example_monorepo` is a realistic sample monorepo (uv + ruff Python projects, Go, shell, Kubernetes YAML, docs and a frontend) whose configs demonstrate every feature; see its [README](example_repos/example_monorepo/README.md). Try `go run . tree example_repos/example_monorepo`.
+## Already using pre-commit?
 
-`TREE_COMMIT_E2E=1 go test -run ExampleMonorepoEndToEnd .` runs all of its hooks for real (needs network, uv, python and go; CI runs it on every platform).
+Your `.pre-commit-config.yaml` works as it is: tree-commit reads it when a folder has no `.tree-commit-config.yaml`. Hooks from repositories such as [pre-commit-hooks](https://github.com/pre-commit/pre-commit-hooks) and [ruff-pre-commit](https://github.com/astral-sh/ruff-pre-commit) are downloaded and run for you. See [Migrating from pre-commit](docs/migrating-from-pre-commit.md).
+
+## Documentation
+
+- [Getting started](docs/getting-started.md): a full walkthrough
+- [Configuration](docs/configuration.md): every config option
+- [How it works](docs/how-it-works.md): nested configs, overrides, ordering and parallelism
+- [Hooks and languages](docs/hooks-and-languages.md): local hooks, remote hook repositories, Python
+- [Command line](docs/cli.md): commands, flags and environment variables
+- [Recipes](docs/recipes.md): monorepo patterns, CI, uv and ruff, Go
+- [Migrating from pre-commit](docs/migrating-from-pre-commit.md)
+- [Troubleshooting](docs/troubleshooting.md)
+
+The [example monorepo](example_repos/example_monorepo) shows every feature in a realistic setup.
+
+## Contributing
+
+See [Development](docs/development.md).

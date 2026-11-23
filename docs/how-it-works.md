@@ -1,6 +1,4 @@
-# Conflict Resolution Strategy
-
-## Overview
+# How tree-commit decides what runs
 
 tree-commit uses a **scope-based execution model** with **closest-wins** conflict resolution. Hooks only run on files within their scope, and nested configurations can override parent configurations. This keeps monorepos fast and lets every team own its own checks.
 
