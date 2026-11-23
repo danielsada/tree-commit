@@ -1,48 +1,11 @@
+# The calc library. ruff comes from the root config; this adds its test suite.
 repos:
   - repo: local
     hooks:
-      - id: python-black
-        name: Black Python Formatter
-        entry: black
-        language: python
-        files: \.py$
-        include_folders:
-          - src/
-          - tests/
-        exclude_folders:
-          - build/
-          - dist/
-          - __pycache__/
-
-      - id: python-flake8
-        name: Flake8 Python Linter
-        entry: flake8
-        language: python
-        files: \.py$
-        include_folders:
-          - src/
-          - tests/
-        exclude_folders:
-          - migrations/
-          - build/
-
       - id: pytest
-        name: Python Tests
-        entry: pytest
-        language: python
-        files: \.py$
+        name: pytest (calc)
+        # Runs in python_lib/, the uv project directory.
+        entry: uv run --locked pytest -q
+        language: system
+        types: [python]
         pass_filenames: false
-        include_folders:
-          - tests/
-        exclude_folders:
-          - build/
-
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.4.0
-    hooks:
-      - id: trailing-whitespace
-        include_folders:
-          - src/
-          - tests/
-        exclude_folders:
-          - __pycache__/

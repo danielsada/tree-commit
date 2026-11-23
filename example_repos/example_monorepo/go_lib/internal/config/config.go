@@ -1,38 +1,31 @@
+// Package config loads the service configuration.
 package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 )
 
-// Config represents application configuration
+// Config is the service configuration.
 type Config struct {
 	AppName string `json:"app_name"`
-	Version string `json:"version"`
+	Port    int    `json:"port"`
 	Debug   bool   `json:"debug"`
 }
 
-// Load reads configuration from a JSON file
-func Load(filename string) (*Config, error) {
-	data, err := os.ReadFile(filename)
+// Load reads a JSON configuration file.
+func Load(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read config: %w", err)
 	}
-
-	var config Config
-	if err := json.Unmarshal(data, &config); err != nil {
-		return nil, err
+	var cfg Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
-
-	return &config, nil
-}
-
-// Save writes configuration to a JSON file
-func (c *Config) Save(filename string) error {
-	data, err := json.MarshalIndent(c, "", "  ")
-	if err != nil {
-		return err
+	if cfg.Port == 0 {
+		cfg.Port = 8000
 	}
-
-	return os.WriteFile(filename, data, 0644)
+	return &cfg, nil
 }

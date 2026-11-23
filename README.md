@@ -146,4 +146,6 @@ go test ./...
 golangci-lint run
 ```
 
-`example_repos/example_monorepo` is a sample monorepo used by the tests. Try `go run . tree example_repos/example_monorepo`.
+`example_repos/example_monorepo` is a realistic sample monorepo (uv + ruff Python projects, Go, shell, Kubernetes YAML, docs and a frontend) whose configs demonstrate every feature; see its [README](example_repos/example_monorepo/README.md). Try `go run . tree example_repos/example_monorepo`.
+
+`TREE_COMMIT_E2E=1 go test -run ExampleMonorepoEndToEnd .` runs all of its hooks for real (needs network, uv, python and go; CI runs it on every platform).

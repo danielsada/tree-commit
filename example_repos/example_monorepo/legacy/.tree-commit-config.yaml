@@ -1,0 +1,11 @@
+# Vendored code we do not own. Keep the repo-wide whitespace and YAML
+# checks, but do not reformat, lint or spell-check it.
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        disable: true
+      - id: ruff-format
+        disable: true
+      - id: codespell
+        disable: true

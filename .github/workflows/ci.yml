@@ -37,11 +37,17 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      # The example monorepo end-to-end test runs its hooks through uv.
+      - uses: astral-sh/setup-uv@v10
       - name: Test
         if: runner.os != 'Windows'
+        env:
+          TREE_COMMIT_E2E: "1"
         run: go test -race -coverprofile=coverage.out ./...
       - name: Test (Windows)
         if: runner.os == 'Windows'
+        env:
+          TREE_COMMIT_E2E: "1"
         run: go test ./...
       - name: Coverage
         if: runner.os == 'Linux'
@@ -53,4 +59,4 @@ jobs:
         run: |
           ./tree-commit --version
           ./tree-commit tree example_repos/example_monorepo
-          ./tree-commit run --dry-run --files example_repos/example_monorepo/go_lib/pkg/mathutil/math.go
+          ./tree-commit run --dry-run --files example_repos/example_monorepo/go_lib/pkg/mathutil/mathutil.go

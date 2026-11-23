@@ -7,81 +7,56 @@ import (
 	"testing"
 )
 
+// exampleConfigDirs lists every directory of the example monorepo that has a config.
+var exampleConfigDirs = []string{
+	".",
+	"docs",
+	"frontend",
+	"go_lib",
+	"infra/k8s",
+	"legacy",
+	"python_lib",
+	"python_lib/src/calc/core",
+	"python_lib/src/calc/utils",
+	"python_lib/src/calc/utils/helpers",
+	"scripts",
+	"services/api",
+}
+
+// nodeAt walks the config tree along a slash-separated directory.
+func nodeAt(tree *ConfigTree, dir string) *ConfigNode {
+	node := tree.Tree
+	if dir == "." {
+		return node
+	}
+	for _, part := range strings.Split(dir, "/") {
+		if node == nil {
+			return nil
+		}
+		node = node.Children[part]
+	}
+	return node
+}
+
 func TestDiscoverConfigsInDirectory(t *testing.T) {
-	// Test walking example_repos/example_monorepo and finding all configs
 	configTree, err := DiscoverConfigs("example_repos/example_monorepo")
 	if err != nil {
 		t.Fatalf("Failed to discover configs: %v", err)
 	}
-
-	// Debug: Print the discovered tree
 	t.Logf("Discovered tree:\n%s", configTree.String())
 
-	// Should find configs in a tree structure
-	// Root level should have 5 main directories
-	expectedMainDirs := []string{"python_lib", "go_lib", "frontend", "docs", "scripts"}
-
-	if configTree.Tree == nil {
-		t.Fatal("Expected root config tree node")
-	}
-
-	t.Logf("Root tree has %d children", len(configTree.Tree.Children))
-	for name := range configTree.Tree.Children {
-		t.Logf("Found child: %s", name)
-	}
-
-	for _, dir := range expectedMainDirs {
-		if configTree.Tree.Children[dir] == nil {
-			t.Errorf("Expected to find config in directory: %s", dir)
+	for _, dir := range exampleConfigDirs {
+		node := nodeAt(configTree, dir)
+		if node == nil || node.Config == nil {
+			t.Errorf("Expected a config in %s", dir)
 		}
 	}
-
-	// Check python_lib has nested structure
-	pythonLibNode := configTree.Tree.Children["python_lib"]
-	if pythonLibNode == nil {
-		t.Fatal("Expected python_lib config node")
-	}
-
-	t.Logf("python_lib node has %d children", len(pythonLibNode.Children))
-	for name := range pythonLibNode.Children {
-		t.Logf("python_lib child: %s", name)
-	}
-
-	// python_lib should have src as child
-	if pythonLibNode.Children["src"] == nil {
-		t.Error("Expected python_lib/src config node")
-		return // Don't continue if this fails
-	}
-
-	// python_lib/src should have core and utils as children
-	srcNode := pythonLibNode.Children["src"]
-	if srcNode == nil {
-		t.Error("srcNode is nil")
-		return
-	}
-
-	t.Logf("src node has %d children", len(srcNode.Children))
-	for name := range srcNode.Children {
-		t.Logf("src child: %s", name)
-	}
-
-	if srcNode.Children["core"] == nil {
-		t.Error("Expected python_lib/src/core config node")
-	}
-	if srcNode.Children["utils"] == nil {
-		t.Error("Expected python_lib/src/utils config node")
-		return
-	}
-
-	// python_lib/src/utils should have helpers as child
-	utilsNode := srcNode.Children["utils"]
-	if utilsNode == nil {
-		t.Error("utilsNode is nil")
-		return
-	}
-
-	if utilsNode.Children["helpers"] == nil {
-		t.Error("Expected python_lib/src/utils/helpers config node")
+	// Intermediate directories without a config are plain nodes.
+	for _, dir := range []string{"python_lib/src", "python_lib/src/calc", "services", "infra"} {
+		node := nodeAt(configTree, dir)
+		if node == nil || node.Config != nil {
+			t.Errorf("Expected %s to be a directory node without config", dir)
+		}
 	}
 }
 
@@ -254,16 +229,12 @@ func TestConfigNodeParsing(t *testing.T) {
 	}
 
 	// Verify nested config parsing
-	srcNode := configTree.Tree.Children["src"]
-	if srcNode == nil {
-		t.Fatal("Expected src config node")
+	coreNode := nodeAt(configTree, "src/calc/core")
+	if coreNode == nil || coreNode.Config == nil {
+		t.Fatal("Expected src/calc/core config node")
 	}
 
-	if srcNode.Config == nil {
-		t.Error("Src config should be parsed")
-	}
-
-	if len(srcNode.Config.Repos) == 0 {
+	if len(coreNode.Config.Repos) == 0 {
 		t.Error("Expected 'repos' key in src config")
 	}
 }
@@ -396,9 +367,11 @@ func TestConfigNodeString(t *testing.T) {
 	}
 
 	// Test child node string
-	srcNode := configTree.Tree.Children["src"]
-	if srcNode != nil {
-		srcString := srcNode.String()
+	if srcNode := configTree.Tree.Children["src"]; srcNode == nil || !strings.Contains(srcNode.String(), "Dir:") {
+		t.Error("Expected src to be a directory node")
+	}
+	if coreNode := nodeAt(configTree, "src/calc/core"); coreNode != nil {
+		srcString := coreNode.String()
 		if !strings.Contains(srcString, "Config:") {
 			t.Error("Expected 'Config:' in src node string")
 		}
@@ -417,8 +390,7 @@ func TestConfigTreeFlattenConfigs(t *testing.T) {
 	// Flatten the tree
 	flatConfigs := configTree.FlattenConfigs()
 
-	// Should find 9 configs total (5 main dirs + 4 nested in python_lib)
-	expectedCount := 9
+	expectedCount := len(exampleConfigDirs)
 	if len(flatConfigs) != expectedCount {
 		t.Errorf("Expected %d flattened configs, got %d", expectedCount, len(flatConfigs))
 	}
@@ -445,16 +417,9 @@ func TestConfigTreeFlattenConfigs(t *testing.T) {
 	}
 
 	// Verify specific expected paths are included
-	expectedPaths := []string{
-		"docs/.tree-commit-config.yaml",
-		"frontend/.tree-commit-config.yaml",
-		"go_lib/.tree-commit-config.yaml",
-		"python_lib/.tree-commit-config.yaml",
-		"scripts/.tree-commit-config.yaml",
-		"python_lib/src/.tree-commit-config.yaml",
-		"python_lib/src/core/.tree-commit-config.yaml",
-		"python_lib/src/utils/.tree-commit-config.yaml",
-		"python_lib/src/utils/helpers/.tree-commit-config.yaml",
+	expectedPaths := make([]string, 0, len(exampleConfigDirs))
+	for _, dir := range exampleConfigDirs {
+		expectedPaths = append(expectedPaths, filepath.Join(dir, ".tree-commit-config.yaml"))
 	}
 
 	for _, expectedPath := range expectedPaths {

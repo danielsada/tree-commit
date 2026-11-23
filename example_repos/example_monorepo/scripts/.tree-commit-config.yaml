@@ -1,39 +1,21 @@
+# Shell tooling, installed on demand with uvx (shellcheck-py and shfmt-py
+# ship the native binaries as Python wheels).
 repos:
   - repo: local
     hooks:
       - id: shellcheck
-        name: Shell Check
-        entry: shellcheck
+        name: shellcheck
+        entry: uvx --from shellcheck-py shellcheck
         language: system
-        files: \.(sh|bash)$
-        include_folders:
-          - .
-        exclude_folders:
-          - vendor/
+        types: [shell]
 
       - id: shfmt
-        name: Shell Format
-        entry: shfmt -w
+        name: shfmt
+        entry: uvx --from shfmt-py shfmt -w -i 4 -ci
         language: system
-        files: \.(sh|bash)$
-        include_folders:
-          - .
-        exclude_folders:
-          - vendor/
+        types: [shell]
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.4.0
+    rev: v6.0.0
     hooks:
-      - id: trailing-whitespace
-        files: \.(sh|bash|py)$
-        include_folders:
-          - .
-        exclude_folders:
-          - __pycache__/
-
-      - id: executable-check
-        files: \.(sh|bash)$
-        include_folders:
-          - .
-        exclude_folders:
-          - vendor/
+      - id: check-executables-have-shebangs

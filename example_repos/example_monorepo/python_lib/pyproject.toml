@@ -1,0 +1,13 @@
+[project]
+name = "calc"
+version = "0.1.0"
+description = "A tiny calculator library used to demo tree-commit."
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

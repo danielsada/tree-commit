@@ -1,0 +1,9 @@
+# Repository-wide ruff settings, used by every Python project that does not
+# pin its own configuration.
+line-length = 100
+target-version = "py311"
+# Lets isort recognize first-party imports in the src layout.
+src = ["python_lib/src"]
+
+[lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

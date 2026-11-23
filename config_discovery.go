@@ -110,11 +110,10 @@ func nodeDescription(node *ConfigNode) string {
 	if node.Config == nil {
 		return fmt.Sprintf("📁 %s/", filepath.Base(node.Dir))
 	}
-	dirName := filepath.Base(filepath.Dir(node.Path))
-	if dirName == "." && len(node.Children) == 0 {
+	if filepath.Dir(node.Path) == "." && len(node.Children) == 0 {
 		return fmt.Sprintf("📄 %s", filepath.Base(node.Path))
 	}
-	return fmt.Sprintf("📁 %s/ (📄 %s)", dirName, filepath.Base(node.Path))
+	return fmt.Sprintf("📁 %s/ (📄 %s)", filepath.Base(node.Dir), filepath.Base(node.Path))
 }
 
 // DiscoverConfigs walks a directory tree and returns every config file found

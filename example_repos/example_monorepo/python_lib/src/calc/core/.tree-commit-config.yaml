@@ -1,0 +1,19 @@
+# The calculation engine is the library's public core: hold it to a stricter
+# standard. Same id as the root hook, so this replaces it for files below
+# core/ (closest config wins).
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check (strict)
+        entry: >-
+          uvx ruff@0.17.6 check --fix --force-exclude
+          --extend-select D,ANN,PL,RET --ignore D203,D213
+        language: system
+        types_or: [python, pyi]
+
+      - id: no-print
+        name: no print() in library code
+        entry: '^\s*print\('
+        language: pygrep
+        types: [python]
