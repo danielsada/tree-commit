@@ -3,204 +3,153 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
 
+// chdir changes the working directory for the duration of the test.
+func chdir(t *testing.T, dir string) {
+	t.Helper()
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(orig); err != nil {
+			t.Errorf("failed to restore directory: %v", err)
+		}
+	})
+}
+
+func readFile(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
 func TestInstallPreCommitHook(t *testing.T) {
-	// Create a temporary directory with a fake git repository
-	tempDir := t.TempDir()
+	dir := newRepo(t, nil)
+	chdir(t, dir)
 
-	// Save current directory and change to temp directory
-	originalDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Failed to get current directory: %v", err)
-	}
-	defer os.Chdir(originalDir)
-
-	err = os.Chdir(tempDir)
-	if err != nil {
-		t.Fatalf("Failed to change to temp directory: %v", err)
-	}
-
-	// Create .git directory to simulate git repository
-	gitDir := ".git"
-	err = os.Mkdir(gitDir, 0755)
-	if err != nil {
-		t.Fatalf("Failed to create .git directory: %v", err)
-	}
-
-	// Test the install function
-	err = installPreCommitHook()
-	if err != nil {
+	if err := installPreCommitHook(); err != nil {
 		t.Fatalf("installPreCommitHook failed: %v", err)
 	}
 
-	// Verify hooks directory was created
-	hooksDir := filepath.Join(gitDir, "hooks")
-	if _, err := os.Stat(hooksDir); os.IsNotExist(err) {
-		t.Error("Hooks directory was not created")
+	hookPath := filepath.Join(dir, ".git", "hooks", "pre-commit")
+	content := readFile(t, hookPath)
+	if !strings.HasPrefix(content, "#!/bin/sh\n") {
+		t.Error("hook should start with a shebang")
+	}
+	if !strings.Contains(content, hookMarker) || !strings.Contains(content, "run --hook-stage pre-commit") {
+		t.Errorf("unexpected hook content:\n%s", content)
+	}
+	if strings.Contains(content, `\`) {
+		t.Errorf("hook should only contain forward slashes:\n%s", content)
 	}
 
-	// Verify hook file was created
-	hookPath := filepath.Join(hooksDir, "tree-commit")
-	if _, err := os.Stat(hookPath); os.IsNotExist(err) {
-		t.Error("Hook file was not created")
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(hookPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode()&0o111 == 0 {
+			t.Error("hook should be executable")
+		}
 	}
 
-	// Verify hook file content
-	content, err := os.ReadFile(hookPath)
-	if err != nil {
-		t.Fatalf("Failed to read hook file: %v", err)
+	// Installing twice is idempotent and does not create a legacy hook.
+	if err := installPreCommitHook(); err != nil {
+		t.Fatalf("second install failed: %v", err)
 	}
-
-	hookContent := string(content)
-	if !strings.HasPrefix(hookContent, "#!/bin/sh\n") {
-		t.Error("Hook file should start with shebang")
-	}
-
-	if !strings.Contains(hookContent, "run") {
-		t.Error("Hook file should contain 'run' command")
-	}
-
-	// Verify file permissions (should be executable)
-	info, err := os.Stat(hookPath)
-	if err != nil {
-		t.Fatalf("Failed to stat hook file: %v", err)
-	}
-
-	mode := info.Mode()
-	if mode&0111 == 0 {
-		t.Error("Hook file should be executable")
+	if fileExists(filepath.Join(dir, ".git", "hooks", legacyName)) {
+		t.Error("reinstalling should not back up our own hook")
 	}
 }
 
 func TestInstallPreCommitHookNotInGitRepo(t *testing.T) {
-	// Create a temporary directory without .git
-	tempDir := t.TempDir()
+	chdir(t, t.TempDir())
 
-	// Save current directory and change to temp directory
-	originalDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Failed to get current directory: %v", err)
-	}
-	defer os.Chdir(originalDir)
-
-	err = os.Chdir(tempDir)
-	if err != nil {
-		t.Fatalf("Failed to change to temp directory: %v", err)
-	}
-
-	// Test the install function - should fail
-	err = installPreCommitHook()
-	if err == nil {
-		t.Error("Expected error when not in git repository")
-	}
-
-	if !strings.Contains(err.Error(), "not in a git repository") {
-		t.Errorf("Expected 'not in a git repository' error, got: %v", err)
+	err := installPreCommitHook()
+	if err == nil || !strings.Contains(err.Error(), "not in a git repository") {
+		t.Fatalf("expected 'not in a git repository' error, got: %v", err)
 	}
 }
 
-func TestInstallPreCommitHookExistingHooksDir(t *testing.T) {
-	// Create a temporary directory with existing .git/hooks
-	tempDir := t.TempDir()
-
-	// Save current directory and change to temp directory
-	originalDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Failed to get current directory: %v", err)
+func TestInstallKeepsExistingHookAndUninstallRestoresIt(t *testing.T) {
+	dir := newRepo(t, nil)
+	chdir(t, dir)
+	hooks := filepath.Join(dir, ".git", "hooks")
+	if err := os.MkdirAll(hooks, 0o750); err != nil {
+		t.Fatal(err)
 	}
-	defer os.Chdir(originalDir)
-
-	err = os.Chdir(tempDir)
-	if err != nil {
-		t.Fatalf("Failed to change to temp directory: %v", err)
+	existing := "#!/bin/sh\necho existing\n"
+	if err := os.WriteFile(filepath.Join(hooks, "pre-commit"), []byte(existing), 0o600); err != nil {
+		t.Fatal(err)
 	}
 
-	// Create .git and hooks directories
-	gitDir := ".git"
-	hooksDir := filepath.Join(gitDir, "hooks")
-	err = os.MkdirAll(hooksDir, 0755)
-	if err != nil {
-		t.Fatalf("Failed to create hooks directory: %v", err)
+	if err := installPreCommitHook(); err != nil {
+		t.Fatalf("install failed: %v", err)
+	}
+	if got := readFile(t, filepath.Join(hooks, legacyName)); got != existing {
+		t.Errorf("existing hook should be kept as %s, got %q", legacyName, got)
+	}
+	if !isTreeCommitHook(filepath.Join(hooks, "pre-commit")) {
+		t.Error("pre-commit should now be the tree-commit hook")
+	}
+	if !hookContains(filepath.Join(hooks, "pre-commit"), legacyName) {
+		t.Error("the previous hook should still run before tree-commit")
 	}
 
-	// Create an existing file in hooks directory
-	existingFile := filepath.Join(hooksDir, "pre-commit")
-	err = os.WriteFile(existingFile, []byte("existing content"), 0644)
-	if err != nil {
-		t.Fatalf("Failed to create existing file: %v", err)
+	if err := uninstallPreCommitHook(); err != nil {
+		t.Fatalf("uninstall failed: %v", err)
 	}
-
-	// Test the install function
-	err = installPreCommitHook()
-	if err != nil {
-		t.Fatalf("installPreCommitHook failed: %v", err)
+	if got := readFile(t, filepath.Join(hooks, "pre-commit")); got != existing {
+		t.Errorf("uninstall should restore the previous hook, got %q", got)
 	}
-
-	// Verify existing file is still there
-	if _, err := os.Stat(existingFile); os.IsNotExist(err) {
-		t.Error("Existing file should not be removed")
-	}
-
-	// Verify our hook file was created
-	hookPath := filepath.Join(hooksDir, "tree-commit")
-	if _, err := os.Stat(hookPath); os.IsNotExist(err) {
-		t.Error("Hook file was not created")
+	if fileExists(filepath.Join(hooks, legacyName)) {
+		t.Error("legacy hook should have been moved back")
 	}
 }
 
-func TestInstallPreCommitHookOverwriteExisting(t *testing.T) {
-	// Test that installing overwrites existing tree-commit hook
-	tempDir := t.TempDir()
-
-	// Save current directory and change to temp directory
-	originalDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Failed to get current directory: %v", err)
+func TestInstallDoesNotChainPreCommitFrameworkHook(t *testing.T) {
+	dir := newRepo(t, nil)
+	chdir(t, dir)
+	hooks := filepath.Join(dir, ".git", "hooks")
+	if err := os.MkdirAll(hooks, 0o750); err != nil {
+		t.Fatal(err)
 	}
-	defer os.Chdir(originalDir)
-
-	err = os.Chdir(tempDir)
-	if err != nil {
-		t.Fatalf("Failed to change to temp directory: %v", err)
+	framework := "#!/usr/bin/env bash\n# File generated by pre-commit: https://pre-commit.com\n"
+	if err := os.WriteFile(filepath.Join(hooks, "pre-commit"), []byte(framework), 0o600); err != nil {
+		t.Fatal(err)
 	}
 
-	// Create .git and hooks directories
-	gitDir := ".git"
-	hooksDir := filepath.Join(gitDir, "hooks")
-	err = os.MkdirAll(hooksDir, 0755)
-	if err != nil {
-		t.Fatalf("Failed to create hooks directory: %v", err)
+	if err := installPreCommitHook(); err != nil {
+		t.Fatalf("install failed: %v", err)
 	}
-
-	// Create existing tree-commit hook
-	hookPath := filepath.Join(hooksDir, "tree-commit")
-	oldContent := "#!/bin/sh\necho 'old hook'"
-	err = os.WriteFile(hookPath, []byte(oldContent), 0755)
-	if err != nil {
-		t.Fatalf("Failed to create existing hook: %v", err)
+	if hookContains(filepath.Join(hooks, "pre-commit"), legacyName) {
+		t.Error("pre-commit's own hook must not be chained (it would re-run pre-commit.legacy and fail)")
 	}
-
-	// Test the install function
-	err = installPreCommitHook()
-	if err != nil {
-		t.Fatalf("installPreCommitHook failed: %v", err)
+	if got := readFile(t, filepath.Join(hooks, legacyName)); got != framework {
+		t.Errorf("pre-commit's hook should be kept for uninstall, got %q", got)
 	}
+}
 
-	// Verify hook file was overwritten
-	content, err := os.ReadFile(hookPath)
-	if err != nil {
-		t.Fatalf("Failed to read hook file: %v", err)
+func TestInstallHonorsCoreHooksPath(t *testing.T) {
+	dir := newRepo(t, nil)
+	chdir(t, dir)
+	runGit(t, dir, "config", "core.hooksPath", "custom-hooks")
+
+	if err := installPreCommitHook(); err != nil {
+		t.Fatalf("install failed: %v", err)
 	}
-
-	newContent := string(content)
-	if newContent == oldContent {
-		t.Error("Hook file should have been overwritten")
-	}
-
-	if !strings.Contains(newContent, "run") {
-		t.Error("New hook file should contain 'run' command")
+	if !isTreeCommitHook(filepath.Join(dir, "custom-hooks", "pre-commit")) {
+		t.Error("hook should be installed in core.hooksPath")
 	}
 }

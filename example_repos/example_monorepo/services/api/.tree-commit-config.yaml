@@ -1,0 +1,19 @@
+# The API team pins its own ruff release through the official pre-commit
+# mirror. The ids match the root hooks, so these replace them for files
+# below services/api/.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.6
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest (api)
+        entry: uv run --locked pytest -q
+        language: system
+        types: [python]
+        pass_filenames: false

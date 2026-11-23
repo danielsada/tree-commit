@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Verify dependencies
+        run: |
+          go mod verify
+          go mod tidy -diff
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.15.0
+
+  test:
+    name: Test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      # The example monorepo end-to-end test runs its hooks through uv.
+      - uses: astral-sh/setup-uv@v10.4.0
+      # Tests of remote Node.js hooks are skipped without Node.js.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+      - name: Test
+        if: runner.os != 'Windows'
+        env:
+          TREE_COMMIT_E2E: "1"
+        run: go test -race -coverprofile=coverage.out ./...
+      - name: Test (Windows)
+        if: runner.os == 'Windows'
+        env:
+          TREE_COMMIT_E2E: "1"
+        run: go test ./...
+      - name: Coverage
+        if: runner.os == 'Linux'
+        run: go tool cover -func=coverage.out | tail -n 1
+      - name: Build
+        run: go build -o tree-commit${{ runner.os == 'Windows' && '.exe' || '' }} .
+      - name: Smoke test
+        shell: bash
+        run: |
+          ./tree-commit --version
+          ./tree-commit tree example_repos/example_monorepo
+          ./tree-commit run --dry-run --files example_repos/example_monorepo/go_lib/pkg/mathutil/mathutil.go

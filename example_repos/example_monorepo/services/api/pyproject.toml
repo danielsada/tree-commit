@@ -1,0 +1,21 @@
+[project]
+name = "api"
+version = "0.1.0"
+description = "A minimal WSGI service exposing the calculator."
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "S"]
+per-file-ignores = { "tests/*" = ["S101"] }

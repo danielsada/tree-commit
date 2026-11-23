@@ -1,0 +1,13 @@
+# Utilities should stay simple. helpers/ holds older code that is being
+# refactored, so it is excluded from the complexity check for now.
+repos:
+  - repo: local
+    hooks:
+      - id: complexity
+        name: ruff mccabe complexity
+        entry: >-
+          uvx ruff@0.17.6 check --force-exclude --select C90
+          --config lint.mccabe.max-complexity=5
+        language: system
+        types: [python]
+        exclude_folders: [helpers/]

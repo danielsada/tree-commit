@@ -1,51 +1,25 @@
+# Go hooks run inside go_lib/, the module root, so ./... means this module.
 repos:
   - repo: local
     hooks:
       - id: gofmt
-        name: Go Format
+        name: gofmt
         entry: gofmt -l -w
         language: system
-        files: \.go$
-        include_folders:
-          - cmd/
-          - pkg/
-          - internal/
-        exclude_folders:
-          - vendor/
+        types: [go]
 
-      - id: golint
-        name: Go Lint
-        entry: golint
+      - id: go-vet
+        name: go vet
+        entry: go vet ./...
         language: system
-        files: \.go$
-        include_folders:
-          - cmd/
-          - pkg/
-          - internal/
-        exclude_folders:
-          - vendor/
-          - generated/
+        types: [go]
+        pass_filenames: false
 
       - id: go-test
-        name: Go Test
+        name: go test
         entry: go test ./...
         language: system
-        files: \.go$
+        types: [go]
         pass_filenames: false
-        include_folders:
-          - pkg/
-          - internal/
-        exclude_folders:
-          - vendor/
-          - testdata/
-
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.4.0
-    hooks:
-      - id: trailing-whitespace
-        include_folders:
-          - cmd/
-          - pkg/
-          - internal/
-        exclude_folders:
-          - vendor/
+        # The command has no tests; changing it alone does not need a test run.
+        exclude_folders: [cmd/]
