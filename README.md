@@ -19,13 +19,14 @@ If you change `backend/app.py` and commit, the root hooks and the backend hooks 
 
 ## Install
 
-You need [Go](https://go.dev/dl/) 1.23 or newer and git.
+You need git. Install tree-commit in one of these ways:
 
-Run this command to install tree-commit:
+- **Download a binary.** Get the archive for your system from the [releases page](https://github.com/danielsada/tree-commit/releases): Linux, macOS and Windows, for amd64 and arm64. Extract it and put `tree-commit` in a directory on your `PATH`. `checksums.txt` has the SHA-256 checksums of the archives.
+- **Build it with Go** 1.23 or newer:
 
-```sh
-go install github.com/danielsada/tree-commit@latest
-```
+  ```sh
+  go install github.com/danielsada/tree-commit@latest
+  ```
 
 Run this command to make sure that tree-commit works:
 

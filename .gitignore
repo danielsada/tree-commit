@@ -1,3 +1,5 @@
-# Binaries written by go build in the repository root.
+# Binaries written by `go build` in the repository root.
 /tree-commit
 /tree-commit.exe
+# GoReleaser output.
+/dist/
